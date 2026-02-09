@@ -10,7 +10,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.UUID;
-import java.util.stream.StreamSupport;
 
 @Service
 @RequiredArgsConstructor
@@ -18,11 +17,17 @@ public class SubscriptionPlanService {
 
     private final SubscriptionPlanRepository planRepository;
 
+    /**
+     * Create a new subscription plan with uniqueness check on name.
+     * 
+     * @param request the creation request with name, monthly limit, and optional window settings
+     * @return the created plan DTO
+     * @throws IllegalArgumentException if plan name already exists
+     */
     @Transactional
     public SubscriptionPlanDto create(CreateSubscriptionPlanRequest request) {
-        if (planRepository.findAll().stream().anyMatch(p -> p.getName().equalsIgnoreCase(request.getName()))) {
-            throw new IllegalArgumentException("Plan with name '" + request.getName() + "' already exists");
-        }
+        validateUniqueName(request.getName());
+        
         SubscriptionPlan plan = SubscriptionPlan.builder()
                 .name(request.getName().trim())
                 .monthlyLimit(request.getMonthlyLimit())
@@ -30,16 +35,41 @@ public class SubscriptionPlanService {
                 .windowSeconds(request.getWindowSeconds())
                 .active(true)
                 .build();
+        
         plan = planRepository.save(plan);
         return SubscriptionPlanDto.from(plan);
     }
 
+    /**
+     * Check that plan name doesn't already exist (case-insensitive).
+     */
+    private void validateUniqueName(String name) {
+        boolean exists = planRepository.findAll()
+                .stream()
+                .anyMatch(p -> p.getName().equalsIgnoreCase(name));
+        
+        if (exists) {
+            throw new IllegalArgumentException(
+                    String.format("Plan with name '%s' already exists", name)
+            );
+        }
+    }
+
+    /**
+     * Retrieve all active subscription plans.
+     */
     public List<SubscriptionPlanDto> findAll() {
-        return StreamSupport.stream(planRepository.findAll().spliterator(), false)
+        return planRepository.findAll()
+                .stream()
                 .map(SubscriptionPlanDto::from)
                 .toList();
     }
 
+    /**
+     * Retrieve a specific subscription plan by ID.
+     * 
+     * @throws IllegalArgumentException if plan not found
+     */
     public SubscriptionPlanDto getById(UUID id) {
         return planRepository.findById(id)
                 .map(SubscriptionPlanDto::from)

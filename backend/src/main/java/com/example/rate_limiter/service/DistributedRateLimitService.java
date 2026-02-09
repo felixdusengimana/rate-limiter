@@ -37,40 +37,51 @@ public class DistributedRateLimitService {
     /**
      * Atomically check and consume one request for the given client. Applies limits from
      * the client's subscription plan (monthly, optional window) and global rules.
+     * 
+     * @return RateLimitResult with allowed flag, current usage, and retry metadata.
      */
     public RateLimitResult tryConsume(UUID clientId) {
+        // Fetch client with subscription plan
         Client client = clientRepository.findByIdWithSubscriptionPlan(clientId).orElse(null);
         if (client == null) {
-            return RateLimitResult.builder().allowed(true).limit(0).current(0).remaining(Long.MAX_VALUE).retryAfterSeconds(0).exceededByType(null).globalUsageRatio(null).build();
+            return buildNoLimitResult();
         }
 
+        // Resolve effective limits (merged from subscription plan + global rules)
         List<EffectiveLimit> limits = effectiveLimitResolver.resolve(client);
         if (limits.isEmpty()) {
-            return RateLimitResult.builder().allowed(true).limit(0).current(0).remaining(Long.MAX_VALUE).retryAfterSeconds(0).exceededByType(null).globalUsageRatio(null).build();
+            return buildNoLimitResult();
         }
 
+        // Track incremented keys for rollback on failure
         List<String> incrementedKeys = new java.util.ArrayList<>();
         long retryAfterSeconds = 0;
         Double globalUsageRatio = null;
 
+        // Check all limits atomically
         for (EffectiveLimit limit : limits) {
             String key = buildKey(limit, clientId);
             int ttlSeconds = getTtlSeconds(limit);
             long limitValue = limit.limitValue();
 
             RateLimitResult result = checkAndIncrement(key, limitValue, ttlSeconds);
+            
             if (result.isAllowed()) {
+                // Increment succeeded, track the key for potential rollback
                 incrementedKeys.add(key);
                 retryAfterSeconds = Math.max(retryAfterSeconds, result.getRetryAfterSeconds());
+                
+                // Update global usage ratio for monitoring
                 if (limit.limitType() == RateLimitType.GLOBAL && result.getLimit() > 0) {
                     globalUsageRatio = (double) result.getCurrent() / result.getLimit();
                 }
             } else {
+                // Limit exceeded: rollback previous increments and return denial
                 rollbackIncrements(incrementedKeys);
-                log.debug("Rate limit exceeded: limitType={}, clientId={}, key={}", limit.limitType(), clientId, key);
-                Double deniedRatio = limit.limitType() == RateLimitType.GLOBAL && result.getLimit() > 0
-                        ? (double) result.getCurrent() / result.getLimit()
-                        : null;
+                log.debug("Rate limit exceeded: limitType={}, clientId={}, key={}", 
+                         limit.limitType(), clientId, key);
+                
+                Double deniedRatio = calculateGlobalUsageRatio(limit, result);
                 return result.toBuilder()
                         .retryAfterSeconds(ttlSeconds)
                         .exceededByType(limit.limitType())
@@ -79,6 +90,7 @@ public class DistributedRateLimitService {
             }
         }
 
+        // All limits passed
         return RateLimitResult.builder()
                 .allowed(true)
                 .limit(0)
@@ -90,30 +102,99 @@ public class DistributedRateLimitService {
                 .build();
     }
 
+    /**
+     * Build a result for a client with no effective limits.
+     */
+    private RateLimitResult buildNoLimitResult() {
+        return RateLimitResult.builder()
+                .allowed(true)
+                .limit(0)
+                .current(0)
+                .remaining(Long.MAX_VALUE)
+                .retryAfterSeconds(0)
+                .exceededByType(null)
+                .globalUsageRatio(null)
+                .build();
+    }
+
+    /**
+     * Calculate global usage ratio (current / limit) when denied.
+     */
+    private Double calculateGlobalUsageRatio(EffectiveLimit limit, RateLimitResult result) {
+        if (limit.limitType() == RateLimitType.GLOBAL && result.getLimit() > 0) {
+            return (double) result.getCurrent() / result.getLimit();
+        }
+        return null;
+    }
+
     private void rollbackIncrements(List<String> keys) {
         for (String key : keys) {
             redisTemplate.opsForValue().decrement(key);
         }
     }
 
+    /**
+     * Build Redis key based on the limit type and client ID.
+     */
     private String buildKey(EffectiveLimit limit, UUID clientId) {
         return switch (limit.limitType()) {
-            case WINDOW -> KEY_PREFIX + "c:" + limit.clientId() + ":" + WINDOW_PREFIX + windowBucket(limit.windowSeconds());
-            case MONTHLY -> KEY_PREFIX + "c:" + limit.clientId() + ":" + MONTHLY_PREFIX + monthBucket();
-            case GLOBAL -> (limit.globalWindowSeconds() != null && limit.globalWindowSeconds() > 0)
-                    ? KEY_PREFIX + "g:" + WINDOW_PREFIX + windowBucket(limit.globalWindowSeconds())
-                    : KEY_PREFIX + "g:" + MONTHLY_PREFIX + monthBucket();
+            case WINDOW -> buildWindowKey(clientId, limit.windowSeconds());
+            case MONTHLY -> buildMonthlyKey(clientId);
+            case GLOBAL -> buildGlobalKey(limit.globalWindowSeconds());
         };
     }
 
+    private String buildWindowKey(UUID clientId, Integer windowSeconds) {
+        long bucket = windowBucket(windowSeconds);
+        return KEY_PREFIX + "c:" + clientId + ":" + WINDOW_PREFIX + bucket;
+    }
+
+    private String buildMonthlyKey(UUID clientId) {
+        String monthBucket = monthBucket();
+        return KEY_PREFIX + "c:" + clientId + ":" + MONTHLY_PREFIX + monthBucket;
+    }
+
+    private String buildGlobalKey(Integer globalWindowSeconds) {
+        if (globalWindowSeconds != null && globalWindowSeconds > 0) {
+            long bucket = windowBucket(globalWindowSeconds);
+            return KEY_PREFIX + "g:" + WINDOW_PREFIX + bucket;
+        } else {
+            String monthBucket = monthBucket();
+            return KEY_PREFIX + "g:" + MONTHLY_PREFIX + monthBucket;
+        }
+    }
+
+    /**
+     * Calculate TTL (time-to-live) in seconds based on limit type.
+     */
     private int getTtlSeconds(EffectiveLimit limit) {
         return switch (limit.limitType()) {
-            case WINDOW -> limit.windowSeconds() != null ? limit.windowSeconds() : 60;
-            case MONTHLY -> (int) ChronoUnit.SECONDS.between(Instant.now(), YearMonth.now().plusMonths(1).atDay(1).atStartOfDay(ZoneOffset.UTC));
-            case GLOBAL -> limit.globalWindowSeconds() != null && limit.globalWindowSeconds() > 0
-                    ? limit.globalWindowSeconds()
-                    : (int) ChronoUnit.SECONDS.between(Instant.now(), YearMonth.now().plusMonths(1).atDay(1).atStartOfDay(ZoneOffset.UTC));
+            case WINDOW -> getWindowTtl(limit.windowSeconds());
+            case MONTHLY -> getMonthlyTtl();
+            case GLOBAL -> getGlobalTtl(limit.globalWindowSeconds());
         };
+    }
+
+    private int getWindowTtl(Integer windowSeconds) {
+        int sec = (windowSeconds != null && windowSeconds > 0) ? windowSeconds : 60;
+        return sec;
+    }
+
+    private int getMonthlyTtl() {
+        return (int) ChronoUnit.SECONDS.between(
+                Instant.now(),
+                YearMonth.now()
+                        .plusMonths(1)
+                        .atDay(1)
+                        .atStartOfDay(ZoneOffset.UTC)
+        );
+    }
+
+    private int getGlobalTtl(Integer globalWindowSeconds) {
+        if (globalWindowSeconds != null && globalWindowSeconds > 0) {
+            return globalWindowSeconds;
+        }
+        return getMonthlyTtl();
     }
 
     private static long windowBucket(Integer windowSeconds) {
@@ -125,9 +206,33 @@ public class DistributedRateLimitService {
         return YearMonth.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyyMM"));
     }
 
+    /**
+     * Atomic Redis operation: check limit and increment counter in one transaction.
+     * Uses Lua script to avoid race conditions.
+     * 
+     * On deny: returns (0, current, limit) to compute globalUsageRatio before decrement.
+     * On allow: returns (1, current, remaining).
+     */
     private RateLimitResult checkAndIncrement(String key, long limit, int ttlSeconds) {
-        // On deny we return (0, current, limit) so caller can compute globalUsageRatio = current/limit before we DECR
-        String script = """
+        String luaScript = buildLuaScript();
+        DefaultRedisScript<List> redisScript = new DefaultRedisScript<>(luaScript, List.class);
+        
+        @SuppressWarnings("unchecked")
+        List<Long> redisResult = (List<Long>) redisTemplate.execute(
+                redisScript,
+                List.of(key),
+                String.valueOf(ttlSeconds),
+                String.valueOf(limit)
+        );
+
+        return parseRedisResult(redisResult, limit, ttlSeconds);
+    }
+
+    /**
+     * Lua script for atomic increment with limit check.
+     */
+    private String buildLuaScript() {
+        return """
                 local current = redis.call('INCR', KEYS[1])
                 if current == 1 then redis.call('EXPIRE', KEYS[1], ARGV[1]) end
                 if current > tonumber(ARGV[2]) then
@@ -136,21 +241,44 @@ public class DistributedRateLimitService {
                 end
                 return {1, current, tonumber(ARGV[2]) - current}
                 """;
-        DefaultRedisScript<List> redisScript = new DefaultRedisScript<>(script, List.class);
-        @SuppressWarnings("unchecked")
-        List<Long> result = (List<Long>) redisTemplate.execute(redisScript, List.of(key), String.valueOf(ttlSeconds), String.valueOf(limit));
+    }
+
+    /**
+     * Parse Redis Lua script result into RateLimitResult.
+     */
+    private RateLimitResult parseRedisResult(List<Long> result, long limit, int ttlSeconds) {
+        // Handle null or incomplete result
         if (result == null || result.size() < 3) {
-            return RateLimitResult.builder().allowed(true).limit(limit).current(0).remaining(limit).retryAfterSeconds(ttlSeconds).exceededByType(null).globalUsageRatio(null).build();
+            return buildDefaultAllowedResult(limit, ttlSeconds);
         }
+
         long allowed = result.get(0);
         long current = result.get(1);
         long third = result.get(2);
-        long remaining = allowed == 1 ? Math.max(0, third) : 0; // on deny, Lua returns limit in third slot
+        
+        // On allow: third = remaining; on deny: third = limit
+        long remaining = (allowed == 1) ? Math.max(0, third) : 0;
+
         return RateLimitResult.builder()
                 .allowed(allowed == 1)
                 .limit(limit)
                 .current(current)
                 .remaining(remaining)
+                .retryAfterSeconds(ttlSeconds)
+                .exceededByType(null)
+                .globalUsageRatio(null)
+                .build();
+    }
+
+    /**
+     * Default result when Redis returns null or invalid data.
+     */
+    private RateLimitResult buildDefaultAllowedResult(long limit, int ttlSeconds) {
+        return RateLimitResult.builder()
+                .allowed(true)
+                .limit(limit)
+                .current(0)
+                .remaining(limit)
                 .retryAfterSeconds(ttlSeconds)
                 .exceededByType(null)
                 .globalUsageRatio(null)

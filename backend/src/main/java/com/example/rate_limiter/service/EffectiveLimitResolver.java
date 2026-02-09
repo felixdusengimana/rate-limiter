@@ -23,24 +23,54 @@ public class EffectiveLimitResolver {
     private final RateLimitRuleRepository ruleRepository;
 
     /**
-     * Returns all limits that apply to this client: plan-based (monthly, optional window) + global rules.
+     * Returns all limits that apply to this client:
+     * - Plan-based: monthly limit + optional per-window limit
+     * - Global: all active GLOBAL rules from repository
+     * 
+     * @param client the client to resolve limits for
+     * @return list of effective limits to enforce
      */
     public List<EffectiveLimit> resolve(Client client) {
-        UUID clientId = client.getId();
-        List<EffectiveLimit> out = new ArrayList<>();
+        List<EffectiveLimit> limits = new ArrayList<>();
 
         SubscriptionPlan plan = client.getSubscriptionPlan();
         if (plan.isActive()) {
-            out.add(EffectiveLimit.fromPlanMonthly(clientId, plan.getMonthlyLimit()));
-            if (plan.getWindowLimit() != null && plan.getWindowLimit() > 0 && plan.getWindowSeconds() != null && plan.getWindowSeconds() > 0) {
-                out.add(EffectiveLimit.fromPlanWindow(clientId, plan.getWindowLimit(), plan.getWindowSeconds()));
-            }
+            addPlanMonthlyLimit(limits, client.getId(), plan);
+            addPlanWindowLimit(limits, client.getId(), plan);
         }
 
-        ruleRepository.findByActiveTrue().stream()
+        // Add all active global rules
+        ruleRepository.findByActiveTrue()
+                .stream()
                 .filter(r -> r.getLimitType() == RateLimitType.GLOBAL)
-                .forEach(r -> out.add(EffectiveLimit.fromGlobalRule(r.getLimitValue(), r.getGlobalWindowSeconds())));
+                .map(r -> EffectiveLimit.fromGlobalRule(r.getLimitValue(), r.getGlobalWindowSeconds()))
+                .forEach(limits::add);
 
-        return out;
+        return limits;
+    }
+
+    /**
+     * Add plan's monthly limit to the list.
+     */
+    private void addPlanMonthlyLimit(List<EffectiveLimit> limits, UUID clientId, SubscriptionPlan plan) {
+        limits.add(EffectiveLimit.fromPlanMonthly(clientId, plan.getMonthlyLimit()));
+    }
+
+    /**
+     * Add plan's per-window limit if configured.
+     */
+    private void addPlanWindowLimit(List<EffectiveLimit> limits, UUID clientId, SubscriptionPlan plan) {
+        boolean hasWindowLimit = plan.getWindowLimit() != null 
+                && plan.getWindowLimit() > 0 
+                && plan.getWindowSeconds() != null 
+                && plan.getWindowSeconds() > 0;
+        
+        if (hasWindowLimit) {
+            limits.add(EffectiveLimit.fromPlanWindow(
+                    clientId, 
+                    plan.getWindowLimit(), 
+                    plan.getWindowSeconds()
+            ));
+        }
     }
 }

@@ -18,15 +18,16 @@ export class LimitsComponent implements OnInit {
   rules: RateLimitRule[] = [];
   loading = false;
   error = '';
-  creating = false;
 
-  newRule: CreateRateLimitRuleRequest = {
-    limitType: 'GLOBAL',
+  // Modal state
+  modal = { open: false, mode: 'create' as 'create' | 'edit' };
+  formData = {
     limitValue: 10000,
-    windowSeconds: null,
-    globalWindowSeconds: 60,
-    clientId: null,
+    globalWindowSeconds: 60 as number | null,
   };
+  editingRule: RateLimitRule | null = null;
+  formLoading = false;
+  formError = '';
 
   constructor(private api: ApiService) {}
 
@@ -49,36 +50,62 @@ export class LimitsComponent implements OnInit {
     });
   }
 
-  create(): void {
-    this.creating = true;
-    this.error = '';
-    const body: CreateRateLimitRuleRequest = {
-      limitType: 'GLOBAL',
-      limitValue: this.newRule.limitValue,
-      globalWindowSeconds: this.newRule.globalWindowSeconds ?? undefined,
-      clientId: null,
+  openCreateModal(): void {
+    this.modal = { open: true, mode: 'create' };
+    this.formData = {
+      limitValue: 10000,
+      globalWindowSeconds: 60,
     };
-    this.api.createRule(body).subscribe({
-      next: () => {
-        this.creating = false;
-        this.loadRules();
-        this.resetForm();
-      },
-      error: (err) => {
-        this.error = err?.error?.message || err?.message || 'Failed to create rule';
-        this.creating = false;
-      },
-    });
+    this.editingRule = null;
+    this.formError = '';
   }
 
-  resetForm(): void {
-    this.newRule = {
-      limitType: 'GLOBAL',
+  openEditModal(rule: RateLimitRule): void {
+    this.modal = { open: true, mode: 'edit' };
+    this.editingRule = rule;
+    this.formData = {
+      limitValue: rule.limitValue,
+      globalWindowSeconds: rule.globalWindowSeconds,
+    };
+    this.formError = '';
+  }
+
+  closeModal(): void {
+    this.modal = { open: false, mode: 'create' };
+    this.formData = {
       limitValue: 10000,
-      windowSeconds: null,
       globalWindowSeconds: 60,
+    };
+    this.editingRule = null;
+    this.formError = '';
+  }
+
+  submitForm(): void {
+    if (this.formData.limitValue <= 0) return;
+    this.formLoading = true;
+    this.formError = '';
+
+    const body: CreateRateLimitRuleRequest = {
+      limitType: 'GLOBAL',
+      limitValue: this.formData.limitValue,
+      globalWindowSeconds: this.formData.globalWindowSeconds ?? undefined,
       clientId: null,
     };
+
+    const request$ = this.modal.mode === 'create'
+      ? this.api.createRule(body)
+      : this.api.updateRule(this.editingRule!.id, body);
+
+    request$.subscribe({
+      next: () => {
+        this.closeModal();
+        this.loadRules();
+      },
+      error: (err) => {
+        this.formError = err?.error?.message || err?.message || 'Failed to save rule';
+        this.formLoading = false;
+      },
+    });
   }
 
   ruleLabel(r: RateLimitRule): string {

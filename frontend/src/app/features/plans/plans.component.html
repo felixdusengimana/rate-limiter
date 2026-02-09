@@ -1,43 +1,165 @@
-<h1>Subscription plans</h1>
-<p class="muted">Clients subscribe to a plan. Their usage is limited by the plan (monthly, and optional per-window).</p>
+<div class="page-container">
+  <!-- Header with Create Button -->
+  <div class="page-header">
+    <div>
+      <h1>Subscription Plans</h1>
+      <p class="subtitle">Clients subscribe to a plan. Their usage is limited by the plan (monthly, and optional per-window).</p>
+    </div>
+    <button class="btn-create" (click)="openCreateModal()">+ Create Plan</button>
+  </div>
 
-@if (error) {
-  <p class="error-message">{{ error }}</p>
-}
-
-<form class="form" (ngSubmit)="create()">
-  <div class="row">
-    <label>Plan name</label>
-    <input type="text" [(ngModel)]="newPlan.name" name="name" placeholder="e.g. Basic, Pro" />
-  </div>
-  <div class="row">
-    <label>Monthly limit (requests)</label>
-    <input type="number" [(ngModel)]="newPlan.monthlyLimit" name="monthlyLimit" min="1" />
-  </div>
-  <div class="row">
-    <label>Window limit (optional, e.g. per minute)</label>
-    <input type="number" [(ngModel)]="newPlan.windowLimit" name="windowLimit" min="0" placeholder="Leave empty for no window cap" />
-  </div>
-  <div class="row">
-    <label>Window seconds (if window limit set)</label>
-    <input type="number" [(ngModel)]="newPlan.windowSeconds" name="windowSeconds" min="1" placeholder="e.g. 60" />
-  </div>
-  <button type="submit" [disabled]="creating || !newPlan.name.trim()">Create plan</button>
-</form>
-
-@if (loading) {
-  <p>Loading…</p>
-} @else {
-  <ul class="list">
-    @for (p of plans; track p.id) {
-      <li class="card">
-        <strong>{{ p.name }}</strong>
-        <span class="summary">{{ planSummary(p) }}</span>
-        <span [class.badge]="true" [class.active]="p.active">{{ p.active ? 'Active' : 'Inactive' }}</span>
-      </li>
-    }
-  </ul>
-  @if (plans.length === 0) {
-    <p class="muted">No plans yet. Create one above (or the backend will create a "Default" plan on first run).</p>
+  <!-- Error Alert -->
+  @if (error) {
+    <div class="alert alert-error">
+      <strong>Error:</strong> {{ error }}
+    </div>
   }
-}
+
+  <!-- Loading State -->
+  @if (loading) {
+    <div class="loading-state">
+      <div class="spinner"></div>
+      <p>Loading plans...</p>
+    </div>
+  } @else {
+    <!-- Plans List -->
+    @if (plans.length === 0) {
+      <div class="empty-state">
+        <p>No plans yet</p>
+        <p class="muted">Create one above or the backend will create a "Default" plan on first run.</p>
+        <button class="btn-primary" (click)="openCreateModal()">Create your first plan</button>
+      </div>
+    } @else {
+      <div class="plans-grid">
+        @for (p of plans; track p.id) {
+          <div class="plan-card">
+            <div class="plan-header">
+              <h3>{{ p.name }}</h3>
+              <span [class.badge]="true" [class.active]="p.active" [class.inactive]="!p.active">
+                {{ p.active ? 'Active' : 'Inactive' }}
+              </span>
+            </div>
+
+            <div class="plan-details">
+              <div class="detail-row">
+                <span class="label">Monthly Limit:</span>
+                <span class="value">{{ p.monthlyLimit.toLocaleString() }} requests</span>
+              </div>
+              @if (p.windowLimit != null && p.windowSeconds != null) {
+                <div class="detail-row">
+                  <span class="label">Window Limit:</span>
+                  <span class="value">{{ p.windowLimit }} requests / {{ p.windowSeconds }}s</span>
+                </div>
+              }
+            </div>
+
+            <button class="btn-small" (click)="openEditModal(p)" title="Edit plan">Edit</button>
+          </div>
+        }
+      </div>
+    }
+  }
+
+  <!-- Modal Backdrop -->
+  @if (modal.open) {
+    <div class="modal-backdrop" (click)="closeModal()"></div>
+  }
+
+  <!-- Modal -->
+  @if (modal.open) {
+    <div class="modal">
+      <div class="modal-header">
+        <h2>@if (modal.mode === 'create') { Create New Plan } @else { Edit Plan }</h2>
+        <button class="modal-close" (click)="closeModal()">×</button>
+      </div>
+
+      <div class="modal-body">
+        @if (formError) {
+          <div class="alert alert-error" style="margin-bottom: 1rem;">
+            {{ formError }}
+          </div>
+        }
+
+        <form (ngSubmit)="submitForm()" class="modal-form">
+          <div class="form-group">
+            <label for="name">Plan Name *</label>
+            <input
+              id="name"
+              type="text"
+              [(ngModel)]="formData.name"
+              name="name"
+              placeholder="e.g., Basic, Pro, Enterprise"
+              [disabled]="formLoading"
+              required
+            />
+          </div>
+
+          <div class="form-group">
+            <label for="monthly">Monthly Limit (requests) *</label>
+            <input
+              id="monthly"
+              type="number"
+              [(ngModel)]="formData.monthlyLimit"
+              name="monthlyLimit"
+              min="1"
+              [disabled]="formLoading"
+              required
+            />
+            <small class="form-hint">Maximum requests per calendar month</small>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="window">Window Limit (optional)</label>
+              <input
+                id="window"
+                type="number"
+                [(ngModel)]="formData.windowLimit"
+                name="windowLimit"
+                min="0"
+                placeholder="e.g., 100"
+                [disabled]="formLoading"
+              />
+              <small class="form-hint">Per-minute or per-window limit</small>
+            </div>
+
+            <div class="form-group">
+              <label for="seconds">Window Seconds (optional)</label>
+              <input
+                id="seconds"
+                type="number"
+                [(ngModel)]="formData.windowSeconds"
+                name="windowSeconds"
+                min="1"
+                placeholder="e.g., 60"
+                [disabled]="formLoading"
+              />
+              <small class="form-hint">Window duration in seconds</small>
+            </div>
+          </div>
+
+          <div class="form-hint-block">
+            <strong>Example:</strong> Monthly: 10,000 | Window: 100 requests per 60 seconds
+          </div>
+
+          <div class="modal-actions">
+            <button type="button" class="btn-secondary" (click)="closeModal()" [disabled]="formLoading">
+              Cancel
+            </button>
+            <button
+              type="submit"
+              class="btn-primary"
+              [disabled]="formLoading || !formData.name.trim()"
+            >
+              @if (formLoading) {
+                <span class="spinner-small"></span> @if (modal.mode === 'create') { Creating... } @else { Updating... }
+              } @else {
+                @if (modal.mode === 'create') { Create Plan } @else { Update Plan }
+              }
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  }
+</div>

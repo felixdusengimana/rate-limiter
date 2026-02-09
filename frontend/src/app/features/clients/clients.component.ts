@@ -15,15 +15,26 @@ export class ClientsComponent implements OnInit {
   plans: SubscriptionPlan[] = [];
   loading = false;
   error = '';
-  createName = '';
-  createPlanId = '';
-  creating = false;
+
+  // Modal state
+  modal = { open: false, mode: 'create' as 'create' | 'edit' };
+  formData = { name: '', planId: '' };
+  editingClient: Client | null = null;
+  formLoading = false;
+  formError = '';
 
   constructor(private api: ApiService) {}
 
   ngOnInit(): void {
     this.load();
-    this.api.getPlans().subscribe({ next: (list) => (this.plans = list), error: () => {} });
+    this.loadPlans();
+  }
+
+  private loadPlans(): void {
+    this.api.getPlans().subscribe({
+      next: (list) => (this.plans = list),
+      error: () => {},
+    });
   }
 
   load(): void {
@@ -41,21 +52,50 @@ export class ClientsComponent implements OnInit {
     });
   }
 
-  create(): void {
-    if (!this.createName.trim() || !this.createPlanId) return;
-    this.creating = true;
-    this.error = '';
-    const req: CreateClientRequest = { name: this.createName.trim(), subscriptionPlanId: this.createPlanId };
-    this.api.createClient(req).subscribe({
+  openCreateModal(): void {
+    this.modal = { open: true, mode: 'create' };
+    this.formData = { name: '', planId: '' };
+    this.editingClient = null;
+    this.formError = '';
+  }
+
+  openEditModal(client: Client): void {
+    this.modal = { open: true, mode: 'edit' };
+    this.editingClient = client;
+    this.formData = { name: client.name, planId: client.subscriptionPlanId || '' };
+    this.formError = '';
+  }
+
+  closeModal(): void {
+    this.modal = { open: false, mode: 'create' };
+    this.formData = { name: '', planId: '' };
+    this.editingClient = null;
+    this.formError = '';
+  }
+
+  submitForm(): void {
+    if (!this.formData.name.trim() || !this.formData.planId) return;
+    this.formLoading = true;
+    this.formError = '';
+
+    const req: CreateClientRequest = {
+      name: this.formData.name.trim(),
+      subscriptionPlanId: this.formData.planId,
+    };
+
+    const request$ = this.modal.mode === 'create'
+      ? this.api.createClient(req)
+      : this.api.updateClient(this.editingClient!.id, req);
+
+    request$.subscribe({
       next: () => {
-        this.createName = '';
-        this.createPlanId = '';
-        this.creating = false;
+        this.closeModal();
         this.load();
       },
       error: (err) => {
-        this.error = err?.error?.message || err?.message || 'Failed to create client';
-        this.creating = false;
+        const action = this.modal.mode === 'create' ? 'create' : 'update';
+        this.formError = err?.error?.message || err?.message || `Failed to ${action} client`;
+        this.formLoading = false;
       },
     });
   }

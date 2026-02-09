@@ -52,4 +52,16 @@ public class SubscriptionPlanController {
     public SubscriptionPlanDto get(@PathVariable UUID id) {
         return planService.getById(id);
     }
+
+    /**
+     * Update an existing subscription plan.
+     * 
+     * @param id the plan UUID
+     * @param request contains updated plan fields
+     * @return the updated plan DTO
+     */
+    @PutMapping("/{id}")
+    public SubscriptionPlanDto update(@PathVariable UUID id, @Valid @RequestBody CreateSubscriptionPlanRequest request) {
+        return planService.update(id, request);
+    }
 }

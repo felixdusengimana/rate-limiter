@@ -54,4 +54,16 @@ public class RateLimitRuleController {
     public RateLimitRuleDto get(@PathVariable UUID id) {
         return ruleService.getById(id);
     }
+
+    /**
+     * Update an existing global rate limit rule.
+     * 
+     * @param id the rule UUID
+     * @param request contains updated rule fields
+     * @return the updated rule DTO
+     */
+    @PutMapping("/{id}")
+    public RateLimitRuleDto update(@PathVariable UUID id, @Valid @RequestBody CreateRateLimitRuleRequest request) {
+        return ruleService.update(id, request);
+    }
 }

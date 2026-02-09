@@ -18,14 +18,18 @@ export class PlansComponent implements OnInit {
   plans: SubscriptionPlan[] = [];
   loading = false;
   error = '';
-  creating = false;
 
-  newPlan: CreateSubscriptionPlanRequest = {
+  // Modal state
+  modal = { open: false, mode: 'create' as 'create' | 'edit' };
+  formData = {
     name: '',
     monthlyLimit: 1000,
-    windowLimit: null,
-    windowSeconds: null,
+    windowLimit: null as number | null,
+    windowSeconds: null as number | null,
   };
+  editingPlan: SubscriptionPlan | null = null;
+  formLoading = false;
+  formError = '';
 
   constructor(private api: ApiService) {}
 
@@ -48,25 +52,67 @@ export class PlansComponent implements OnInit {
     });
   }
 
-  create(): void {
-    if (!this.newPlan.name.trim()) return;
-    this.creating = true;
-    this.error = '';
-    const body: CreateSubscriptionPlanRequest = {
-      name: this.newPlan.name.trim(),
-      monthlyLimit: this.newPlan.monthlyLimit,
-      windowLimit: this.newPlan.windowLimit ?? undefined,
-      windowSeconds: this.newPlan.windowSeconds ?? undefined,
+  openCreateModal(): void {
+    this.modal = { open: true, mode: 'create' };
+    this.formData = {
+      name: '',
+      monthlyLimit: 1000,
+      windowLimit: null,
+      windowSeconds: null,
     };
-    this.api.createPlan(body).subscribe({
+    this.editingPlan = null;
+    this.formError = '';
+  }
+
+  openEditModal(plan: SubscriptionPlan): void {
+    this.modal = { open: true, mode: 'edit' };
+    this.editingPlan = plan;
+    this.formData = {
+      name: plan.name,
+      monthlyLimit: plan.monthlyLimit,
+      windowLimit: plan.windowLimit,
+      windowSeconds: plan.windowSeconds,
+    };
+    this.formError = '';
+  }
+
+  closeModal(): void {
+    this.modal = { open: false, mode: 'create' };
+    this.formData = {
+      name: '',
+      monthlyLimit: 1000,
+      windowLimit: null,
+      windowSeconds: null,
+    };
+    this.editingPlan = null;
+    this.formError = '';
+  }
+
+  submitForm(): void {
+    if (!this.formData.name.trim()) return;
+    this.formLoading = true;
+    this.formError = '';
+
+    const body: CreateSubscriptionPlanRequest = {
+      name: this.formData.name.trim(),
+      monthlyLimit: this.formData.monthlyLimit,
+      windowLimit: this.formData.windowLimit ?? undefined,
+      windowSeconds: this.formData.windowSeconds ?? undefined,
+    };
+
+    const request$ = this.modal.mode === 'create'
+      ? this.api.createPlan(body)
+      : this.api.updatePlan(this.editingPlan!.id, body);
+
+    request$.subscribe({
       next: () => {
-        this.newPlan = { name: '', monthlyLimit: 1000, windowLimit: null, windowSeconds: null };
-        this.creating = false;
+        this.closeModal();
         this.load();
       },
       error: (err) => {
-        this.error = err?.error?.message || err?.message || 'Failed to create plan';
-        this.creating = false;
+        const action = this.modal.mode === 'create' ? 'create' : 'update';
+        this.formError = err?.error?.message || err?.message || `Failed to ${action} plan`;
+        this.formLoading = false;
       },
     });
   }

@@ -84,6 +84,10 @@ export class ApiService {
     return this.http.get<Client>(`${this.base}/api/clients/${id}`);
   }
 
+  updateClient(id: string, body: CreateClientRequest): Observable<Client> {
+    return this.http.put<Client>(`${this.base}/api/clients/${id}`, body);
+  }
+
   // Subscription plans
   createPlan(body: CreateSubscriptionPlanRequest): Observable<SubscriptionPlan> {
     return this.http.post<SubscriptionPlan>(`${this.base}/api/plans`, body);
@@ -97,6 +101,10 @@ export class ApiService {
     return this.http.get<SubscriptionPlan>(`${this.base}/api/plans/${id}`);
   }
 
+  updatePlan(id: string, body: CreateSubscriptionPlanRequest): Observable<SubscriptionPlan> {
+    return this.http.put<SubscriptionPlan>(`${this.base}/api/plans/${id}`, body);
+  }
+
   // Rate limit rules (global limits only; per-client limits come from subscription)
   createRule(body: CreateRateLimitRuleRequest): Observable<RateLimitRule> {
     return this.http.post<RateLimitRule>(`${this.base}/api/limits`, body);
@@ -104,6 +112,10 @@ export class ApiService {
 
   getRules(): Observable<RateLimitRule[]> {
     return this.http.get<RateLimitRule[]>(`${this.base}/api/limits`);
+  }
+
+  updateRule(id: string, body: CreateRateLimitRuleRequest): Observable<RateLimitRule> {
+    return this.http.put<RateLimitRule>(`${this.base}/api/limits/${id}`, body);
   }
 
   // Notifications (require X-API-Key header)

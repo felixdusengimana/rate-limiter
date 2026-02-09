@@ -6,6 +6,7 @@ import com.example.rate_limiter.domain.RateLimitType;
 import com.example.rate_limiter.service.ClientService;
 import com.example.rate_limiter.service.DistributedRateLimitService;
 import com.example.rate_limiter.service.RateLimitResult;
+import com.example.rate_limiter.util.TimeFormatUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -50,10 +51,34 @@ public class RateLimitFilter extends OncePerRequestFilter {
         return !path.startsWith("/api/notify/");
     }
 
+    /**
+     * Add CORS headers to allow the frontend (http://localhost:4200) to read the response.
+     */
+    private void addCorsHeaders(HttpServletRequest request, HttpServletResponse response) {
+        String origin = request.getHeader("Origin");
+        if (origin != null && (origin.equals("http://localhost:4200") || origin.equals("http://127.0.0.1:4200"))) {
+            response.setHeader("Access-Control-Allow-Origin", origin);
+            response.setHeader("Access-Control-Allow-Credentials", "true");
+            response.setHeader("Access-Control-Expose-Headers", 
+                    "Content-Type, X-RateLimit-Limit, X-RateLimit-Remaining, Retry-After");
+            response.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+            response.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-API-Key");
+        }
+    }
+
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
         
+        // Add CORS headers for responses from this filter
+        addCorsHeaders(request, response);
+        
+        // Skip rate limiting for CORS preflight (OPTIONS) requests
+        if ("OPTIONS".equalsIgnoreCase(request.getMethod())) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+
         // Extract and validate API key
         String apiKey = request.getHeader(API_KEY_HEADER);
         if (apiKey == null || apiKey.isBlank()) {
@@ -192,11 +217,28 @@ public class RateLimitFilter extends OncePerRequestFilter {
             response.setHeader(RATE_LIMIT_REMAINING_HEADER, "0");
         }
         
+        // Build detailed error message based on which limit was exceeded
+        String limitTypeDesc = result.getExceededByType() == RateLimitType.GLOBAL 
+            ? "Global system limit"
+            : "Your subscription plan limit";
+        
+        String formattedDuration = TimeFormatUtil.formatDuration(result.getRetryAfterSeconds());
+        String detailMessage = String.format(
+            "%s exhausted. Limit: %d requests. Retry after %s.",
+            limitTypeDesc,
+            result.getLimit(),
+            formattedDuration
+        );
+        
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         response.getWriter().write(objectMapper.writeValueAsString(Map.of(
                 "error", "Too Many Requests",
-                "message", "Rate limit exceeded. Retry after " + result.getRetryAfterSeconds() + " seconds.",
-                "retryAfterSeconds", result.getRetryAfterSeconds()
+                "message", detailMessage,
+                "limitType", result.getExceededByType().toString(),
+                "limit", result.getLimit(),
+                "current", result.getCurrent(),
+                "retryAfterSeconds", result.getRetryAfterSeconds(),
+                "retryAfterFormatted", formattedDuration
         )));
     }
 }

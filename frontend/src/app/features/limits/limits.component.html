@@ -1,35 +1,157 @@
-<h1>Global limits</h1>
-<p class="muted">System-wide caps. Per-client limits are set by their subscription plan (see Plans).</p>
-
-@if (error) {
-  <p class="error-message">{{ error }}</p>
-}
-
-<form class="form" (ngSubmit)="create()">
-  <div class="row">
-    <label>Limit (requests)</label>
-    <input type="number" [(ngModel)]="newRule.limitValue" name="limitValue" min="1" />
+<div class="page-container">
+  <!-- Header with Create Button -->
+  <div class="page-header">
+    <div>
+      <h1>Global Rate Limits</h1>
+      <p class="subtitle">System-wide caps. Per-client limits are set by their subscription plan.</p>
+    </div>
+    <button class="btn-create" (click)="openCreateModal()">+ Add Limit</button>
   </div>
-  <div class="row">
-    <label>Global window (seconds, optional)</label>
-    <input type="number" [(ngModel)]="newRule.globalWindowSeconds" name="globalWindowSeconds" min="0" placeholder="e.g. 60 or leave empty for monthly" />
-  </div>
-  <button type="submit" [disabled]="creating">Add global limit</button>
-</form>
 
-@if (loading) {
-  <p>Loading…</p>
-} @else {
-  <ul class="list">
-    @for (r of rules; track r.id) {
-      <li class="card">
-        <span class="type">{{ r.limitType }}</span>
-        <span>{{ ruleLabel(r) }}</span>
-        <span [class.badge]="true" [class.active]="r.active">{{ r.active ? 'Active' : 'Inactive' }}</span>
-      </li>
-    }
-  </ul>
-  @if (rules.length === 0) {
-    <p class="muted">No rate limit rules yet.</p>
+  <!-- Error Alert -->
+  @if (error) {
+    <div class="alert alert-error">
+      <strong>Error:</strong> {{ error }}
+    </div>
   }
-}
+
+  <!-- Loading State -->
+  @if (loading) {
+    <div class="loading-state">
+      <div class="spinner"></div>
+      <p>Loading limits...</p>
+    </div>
+  } @else {
+    <!-- Rules List -->
+    @if (rules.length === 0) {
+      <div class="empty-state">
+        <p>No rate limit rules yet</p>
+        <button class="btn-primary" (click)="openCreateModal()">Add your first global limit</button>
+      </div>
+    } @else {
+      <div class="table-responsive">
+        <table class="limits-table">
+          <thead>
+            <tr>
+              <th>Type</th>
+              <th>Limit</th>
+              <th>Window</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (r of rules; track r.id) {
+              <tr>
+                <td>
+                  <span class="type-badge">{{ r.limitType }}</span>
+                </td>
+                <td><strong>{{ r.limitValue.toLocaleString() }} requests</strong></td>
+                <td>
+                  @if (r.globalWindowSeconds) {
+                    Per {{ r.globalWindowSeconds }}s
+                  } @else {
+                    Per month
+                  }
+                </td>
+                <td>
+                  <span [class.badge]="true" [class.active]="r.active" [class.inactive]="!r.active">
+                    {{ r.active ? 'Active' : 'Inactive' }}
+                  </span>
+                </td>
+                <td>
+                  <button class="btn-small" (click)="openEditModal(r)" title="Edit limit">Edit</button>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  }
+
+  <!-- Modal Backdrop -->
+  @if (modal.open) {
+    <div class="modal-backdrop" (click)="closeModal()"></div>
+  }
+
+  <!-- Modal -->
+  @if (modal.open) {
+    <div class="modal">
+      <div class="modal-header">
+        <h2>
+          @if (modal.mode === 'create') {
+            Add Global Rate Limit
+          } @else {
+            Edit Global Rate Limit
+          }
+        </h2>
+        <button class="modal-close" (click)="closeModal()">×</button>
+      </div>
+
+      <div class="modal-body">
+        @if (formError) {
+          <div class="alert alert-error" style="margin-bottom: 1rem;">
+            {{ formError }}
+          </div>
+        }
+
+        <form (ngSubmit)="submitForm()" class="modal-form">
+          <div class="form-group">
+            <label for="limit">Limit (requests) *</label>
+            <input
+              id="limit"
+              type="number"
+              [(ngModel)]="formData.limitValue"
+              name="limitValue"
+              min="1"
+              [disabled]="formLoading"
+              required
+            />
+            <small class="form-hint">Maximum requests allowed globally</small>
+          </div>
+
+          <div class="form-group">
+            <label for="window">Global Window (seconds, optional)</label>
+            <input
+              id="window"
+              type="number"
+              [(ngModel)]="formData.globalWindowSeconds"
+              name="globalWindowSeconds"
+              min="1"
+              placeholder="e.g., 60 (leave empty for monthly)"
+              [disabled]="formLoading"
+            />
+            <small class="form-hint">Time window in seconds. Leave empty for a monthly limit.</small>
+          </div>
+
+          <div class="form-hint-block">
+            <strong>Examples:</strong>
+            <ul>
+              <li>10,000 with window 60s: 10,000 requests per minute</li>
+              <li>1,000,000 with no window: 1,000,000 requests per month</li>
+            </ul>
+          </div>
+
+          <div class="modal-actions">
+            <button type="button" class="btn-secondary" (click)="closeModal()" [disabled]="formLoading">
+              Cancel
+            </button>
+            <button
+              type="submit"
+              class="btn-primary"
+              [disabled]="formLoading || formData.limitValue <= 0"
+            >
+              @if (formLoading) {
+                <span class="spinner-small"></span>
+                @if (modal.mode === 'create') { Adding... } @else { Updating... }
+              } @else {
+                @if (modal.mode === 'create') { Add Limit } @else { Update Limit }
+              }
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  }
+</div>

@@ -1,34 +1,134 @@
-<h1>Clients</h1>
+<div class="page-container">
+  <!-- Header with Create Button -->
+  <div class="page-header">
+    <h1>Clients</h1>
+    <button class="btn-create" (click)="openCreateModal()">+ Create Client</button>
+  </div>
 
-@if (error) {
-  <p class="error-message">{{ error }}</p>
-}
-
-<form class="form" (ngSubmit)="create()">
-  <input type="text" [(ngModel)]="createName" name="name" placeholder="Client name" />
-  <select [(ngModel)]="createPlanId" name="plan" required>
-    <option value="">Select subscription plan</option>
-    @for (p of plans; track p.id) {
-      <option [value]="p.id">{{ p.name }} ({{ p.monthlyLimit }} / month)</option>
-    }
-  </select>
-  <button type="submit" [disabled]="creating || !createName.trim() || !createPlanId">Create client</button>
-</form>
-
-@if (loading) {
-  <p>Loading…</p>
-} @else {
-  <ul class="list">
-    @for (c of clients; track c.id) {
-      <li class="card">
-        <strong>{{ c.name }}</strong>
-        <span class="muted">Plan: {{ planName(c.subscriptionPlanId) }}</span>
-        <code class="api-key" [title]="c.apiKey">{{ c.apiKey }}</code>
-        <span [class.badge]="true" [class.active]="c.active">{{ c.active ? 'Active' : 'Inactive' }}</span>
-      </li>
-    }
-  </ul>
-  @if (clients.length === 0) {
-    <p class="muted">No clients yet. Create one above.</p>
+  <!-- Error Alert -->
+  @if (error) {
+    <div class="alert alert-error">
+      <strong>Error:</strong> {{ error }}
+    </div>
   }
-}
+
+  <!-- Loading State -->
+  @if (loading) {
+    <div class="loading-state">
+      <div class="spinner"></div>
+      <p>Loading clients...</p>
+    </div>
+  } @else {
+    <!-- Clients List -->
+    @if (clients.length === 0) {
+      <div class="empty-state">
+        <p>No clients yet</p>
+        <button class="btn-primary" (click)="openCreateModal()">Create your first client</button>
+      </div>
+    } @else {
+      <div class="table-responsive">
+        <table class="clients-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Plan</th>
+              <th>API Key</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (c of clients; track c.id) {
+              <tr>
+                <td><strong>{{ c.name }}</strong></td>
+                <td>{{ planName(c.subscriptionPlanId) }}</td>
+                <td><code class="api-key-cell">{{ c.apiKey }}</code></td>
+                <td>
+                  <span [class.badge]="true" [class.active]="c.active" [class.inactive]="!c.active">
+                    {{ c.active ? 'Active' : 'Inactive' }}
+                  </span>
+                </td>
+                <td>
+                  <button class="btn-small" (click)="openEditModal(c)" title="Edit client">Edit</button>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  }
+
+  <!-- Modal Backdrop -->
+  @if (modal.open) {
+    <div class="modal-backdrop" (click)="closeModal()"></div>
+  }
+
+  <!-- Modal -->
+  @if (modal.open) {
+    <div class="modal">
+      <div class="modal-header">
+        <h2>@if (modal.mode === 'create') { Create New Client } @else { Edit Client }</h2>
+        <button class="modal-close" (click)="closeModal()">×</button>
+      </div>
+
+      <div class="modal-body">
+        @if (formError) {
+          <div class="alert alert-error" style="margin-bottom: 1rem;">
+            {{ formError }}
+          </div>
+        }
+
+        <form (ngSubmit)="submitForm()" class="modal-form">
+          <div class="form-group">
+            <label for="name">Client Name *</label>
+            <input
+              id="name"
+              type="text"
+              [(ngModel)]="formData.name"
+              name="name"
+              placeholder="e.g., Mobile App, Web Service"
+              [disabled]="formLoading"
+              required
+            />
+          </div>
+
+          <div class="form-group">
+            <label for="plan">Subscription Plan *</label>
+            <select
+              id="plan"
+              [(ngModel)]="formData.planId"
+              name="planId"
+              [disabled]="formLoading"
+              required
+            >
+              <option value="">Select a plan...</option>
+              @for (p of plans; track p.id) {
+                <option [value]="p.id">
+                  {{ p.name }} ({{ p.monthlyLimit }} requests/month)
+                </option>
+              }
+            </select>
+          </div>
+
+          <div class="modal-actions">
+            <button type="button" class="btn-secondary" (click)="closeModal()" [disabled]="formLoading">
+              Cancel
+            </button>
+            <button
+              type="submit"
+              class="btn-primary"
+              [disabled]="formLoading || !formData.name.trim() || !formData.planId"
+            >
+              @if (formLoading) {
+                <span class="spinner-small"></span> @if (modal.mode === 'create') { Creating... } @else { Updating... }
+              } @else {
+                @if (modal.mode === 'create') { Create Client } @else { Update Client }
+              }
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  }
+</div>

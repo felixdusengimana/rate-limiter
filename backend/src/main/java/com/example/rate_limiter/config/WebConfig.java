@@ -23,6 +23,12 @@ public class WebConfig implements WebMvcConfigurer {
                 )
                 .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
                 .allowedHeaders("*")
+                .exposedHeaders(
+                        "Content-Type",
+                        "X-RateLimit-Limit",
+                        "X-RateLimit-Remaining",
+                        "Retry-After"
+                )
                 .allowCredentials(true);
     }
 }

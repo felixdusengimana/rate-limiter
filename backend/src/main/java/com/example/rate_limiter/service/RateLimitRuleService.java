@@ -92,4 +92,27 @@ public class RateLimitRuleService {
                 .map(RateLimitRuleDto::from)
                 .orElseThrow(() -> new IllegalArgumentException("Rule not found: " + id));
     }
+
+    /**
+     * Update an existing global rate limit rule.
+     * 
+     * @param id the rule UUID
+     * @param request contains updated rule fields
+     * @return the updated rule DTO
+     * @throws IllegalArgumentException if rule not found or validation fails
+     */
+    @Transactional
+    public RateLimitRuleDto update(UUID id, CreateRateLimitRuleRequest request) {
+        RateLimitRule rule = ruleRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Rule not found: " + id));
+
+        validateRuleType(request.getLimitType());
+        validateRuleValues(request);
+
+        rule.setLimitValue(request.getLimitValue());
+        rule.setGlobalWindowSeconds(request.getGlobalWindowSeconds());
+
+        rule = ruleRepository.save(rule);
+        return RateLimitRuleDto.from(rule);
+    }
 }

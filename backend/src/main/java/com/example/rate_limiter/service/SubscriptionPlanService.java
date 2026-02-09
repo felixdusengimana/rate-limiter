@@ -100,4 +100,33 @@ public class SubscriptionPlanService {
                 .map(SubscriptionPlanDto::from)
                 .orElseThrow(() -> new IllegalArgumentException("Plan not found: " + id));
     }
+
+    /**
+     * Update an existing subscription plan.
+     * 
+     * @param id the plan UUID
+     * @param request contains updated plan fields
+     * @return the updated plan DTO
+     * @throws IllegalArgumentException if plan not found or name conflicts with existing plan
+     */
+    @Transactional
+    public SubscriptionPlanDto update(UUID id, CreateSubscriptionPlanRequest request) {
+        SubscriptionPlan plan = planRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Plan not found: " + id));
+
+        // Check for name uniqueness only if name has changed
+        if (!plan.getName().equalsIgnoreCase(request.getName())) {
+            validateUniqueName(request.getName());
+        }
+
+        validatePlanConfiguration(request);
+
+        plan.setName(request.getName().trim());
+        plan.setMonthlyLimit(request.getMonthlyLimit());
+        plan.setWindowLimit(request.getWindowLimit());
+        plan.setWindowSeconds(request.getWindowSeconds());
+
+        plan = planRepository.save(plan);
+        return SubscriptionPlanDto.from(plan);
+    }
 }

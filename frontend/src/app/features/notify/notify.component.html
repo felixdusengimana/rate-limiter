@@ -1,38 +1,168 @@
-<h1>Send notification</h1>
+<div class="notify-container">
+  <h1>Send Notification</h1>
 
-@if (error) {
-  <p class="error-message">{{ error }}</p>
-}
-@if (success) {
-  <p class="success-message">{{ success }}</p>
-}
-
-<form class="form">
-  <div class="row">
-    <label>Client (API key)</label>
-    <select [(ngModel)]="selectedClient" name="client" (ngModelChange)="error = ''; success = ''">
-      <option [ngValue]="null">Select a client</option>
-      @for (c of clients; track c.id) {
-        <option [ngValue]="c">{{ c.name }} ({{ c.apiKey }})</option>
+  <!-- Error Alert -->
+  @if (errorDetail) {
+    <div class="alert alert-error">
+      <div class="alert-header">
+        <strong>{{ errorDetail.title }}</strong>
+        <button class="alert-close" (click)="clearError()" aria-label="Close">×</button>
+      </div>
+      <p class="alert-message">{{ errorDetail.message }}</p>
+      @if (errorDetail.retryAfterFormatted) {
+        <p class="alert-detail">
+          <strong>Retry:</strong> Wait {{ errorDetail.retryAfterFormatted }} before trying again.
+        </p>
+        <p class="alert-detail" style="margin-top: 0.5rem; font-size: 0.9em; color: #666;">
+          Consider upgrading your subscription plan for higher limits.
+        </p>
       }
-    </select>
-  </div>
-  <div class="row">
-    <label>Recipient</label>
-    <input type="text" [(ngModel)]="recipient" name="recipient" placeholder="+250788123456 or user&#64;example.com" />
-  </div>
-  <div class="row">
-    <label>Message</label>
-    <textarea [(ngModel)]="message" name="message" rows="3" placeholder="Message content"></textarea>
-  </div>
-  <div class="actions">
-    <button type="button" (click)="sendSms()" [disabled]="loading || !selectedClient || !recipient.trim() || !message.trim()">
-      Send SMS
-    </button>
-    <button type="button" (click)="sendEmail()" [disabled]="loading || !selectedClient || !recipient.trim() || !message.trim()">
-      Send Email
-    </button>
-  </div>
-</form>
+    </div>
+  }
 
-<p class="muted">Requests are rate-limited. Use the client's API key (selected above) via X-API-Key.</p>
+  <!-- Success Alert -->
+  @if (successMessage) {
+    <div class="alert alert-success">
+      <div class="alert-header">
+        <strong>✓ Success</strong>
+        <button class="alert-close" (click)="clearSuccess()" aria-label="Close">×</button>
+      </div>
+      <p class="alert-message">{{ successMessage }}</p>
+      <p class="alert-detail">Message ID: <code>{{ successId }}</code></p>
+    </div>
+  }
+
+  <!-- Notification Form -->
+  <div class="form-card">
+    <form (ngSubmit)="send()" class="notification-form">
+      <!-- Client Selection -->
+      <div class="form-group">
+        <label for="client">Select Client *</label>
+        <select
+          id="client"
+          [(ngModel)]="selectedClient"
+          name="client"
+          required
+          [disabled]="loading"
+          (change)="clearError(); clearSuccess()"
+        >
+          <option [ngValue]="null">Choose a client...</option>
+          @for (c of clients; track c.id) {
+            <option [ngValue]="c">{{ c.name }} — {{ c.apiKey }}</option>
+          }
+        </select>
+        @if (selectedClient) {
+          <small class="form-hint">Client API Key: <code>{{ selectedClient.apiKey }}</code></small>
+        }
+      </div>
+
+      <!-- Channel Selection -->
+      <div class="form-group">
+        <label>Notification Type *</label>
+        <div class="radio-group">
+          <label class="radio-label">
+            <input 
+              type="radio" 
+              name="channel" 
+              value="sms" 
+              [(ngModel)]="notificationType" 
+              [disabled]="loading" 
+            />
+            <span>SMS</span>
+          </label>
+          <label class="radio-label">
+            <input 
+              type="radio" 
+              name="channel" 
+              value="email" 
+              [(ngModel)]="notificationType" 
+              [disabled]="loading" 
+            />
+            <span>Email</span>
+          </label>
+        </div>
+      </div>
+
+      <!-- Recipient Field -->
+      <div class="form-group">
+        <label for="recipient">Recipient *</label>
+        <input
+          id="recipient"
+          type="text"
+          [(ngModel)]="recipient"
+          name="recipient"
+          [placeholder]="notificationType === 'sms' ? 'Phone: +250788123456' : 'Email: user (at) example.com'"
+          [disabled]="loading"
+          (input)="clearError()"
+          required
+          [class.invalid]="recipient.trim() && !isValidRecipient()"
+        />
+        <small class="form-hint">
+          @if (notificationType === 'sms') {
+            SMS: International format with country code (e.g., +250788123456)
+          } @else {
+            Email: Valid email address (e.g., user&#64;example.com)
+          }
+        </small>
+        @if (recipient.trim() && !isValidRecipient()) {
+          <small class="form-error">
+            @if (notificationType === 'sms') {
+              Invalid phone number. Use international format: +country-code + number
+            } @else {
+              Invalid email address.
+            }
+          </small>
+        }
+      </div>
+
+      <!-- Message Field -->
+      <div class="form-group">
+        <label for="message">Message *</label>
+        <textarea
+          id="message"
+          [(ngModel)]="message"
+          name="message"
+          placeholder="Enter your message here..."
+          rows="4"
+          [disabled]="loading"
+          (input)="clearError()"
+          required
+        ></textarea>
+        <small class="form-hint">{{ message.length }} characters</small>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="form-actions">
+        <button
+          type="submit"
+          (click)="send()"
+          [disabled]="loading || !selectedClient || !isValidRecipient() || !message.trim()"
+          [class.loading]="loading"
+        >
+          @if (loading) {
+            <span class="spinner"></span> Sending {{ notificationType === 'sms' ? 'SMS' : 'Email' }}
+          } @else {
+            Send {{ notificationType === 'sms' ? 'SMS' : 'Email' }}
+          }
+        </button>
+      </div>
+
+      <!-- Info Section -->
+      <div class="form-info">
+        <p>
+          <strong>Rate Limits Apply:</strong> Your plan restricts how many messages you can send.
+          <br />
+          The X-API-Key header is automatically included with each request.
+        </p>
+      </div>
+    </form>
+  </div>
+
+  <!-- Loading State -->
+  @if (loading && !errorDetail && !successMessage) {
+    <div class="loading-overlay">
+      <div class="spinner-large"></div>
+      <p>Sending {{ sendingType }}...</p>
+    </div>
+  }
+</div>

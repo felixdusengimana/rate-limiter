@@ -86,4 +86,30 @@ public class ClientService {
         return clientRepository.findByApiKey(apiKey)
                 .orElseThrow(() -> new IllegalArgumentException("Invalid API key"));
     }
+
+    /**
+     * Update an existing client's name and/or subscription plan.
+     * 
+     * @param id the client UUID
+     * @param request contains updated client fields
+     * @return the updated client DTO
+     * @throws IllegalArgumentException if client or subscription plan not found
+     */
+    @Transactional
+    public ClientDto update(UUID id, CreateClientRequest request) {
+        Client client = clientRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Client not found: " + id));
+
+        SubscriptionPlan plan = subscriptionPlanRepository
+                .findById(request.getSubscriptionPlanId())
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "Subscription plan not found: " + request.getSubscriptionPlanId()
+                ));
+
+        client.setName(request.getName());
+        client.setSubscriptionPlan(plan);
+
+        client = clientRepository.save(client);
+        return ClientDto.from(client);
+    }
 }

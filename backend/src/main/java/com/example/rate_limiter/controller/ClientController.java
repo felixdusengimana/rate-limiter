@@ -52,4 +52,16 @@ public class ClientController {
     public ClientDto get(@PathVariable UUID id) {
         return clientService.getById(id);
     }
+
+    /**
+     * Update an existing client.
+     * 
+     * @param id the client UUID
+     * @param request contains updated client fields
+     * @return the updated client DTO
+     */
+    @PutMapping("/{id}")
+    public ClientDto update(@PathVariable UUID id, @Valid @RequestBody CreateClientRequest request) {
+        return clientService.update(id, request);
+    }
 }

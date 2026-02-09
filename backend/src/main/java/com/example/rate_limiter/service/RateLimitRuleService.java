@@ -56,11 +56,19 @@ public class RateLimitRuleService {
     }
 
     /**
-     * Validate rule content.
+     * Validate rule content and consistency.
      */
     private void validateRuleValues(CreateRateLimitRuleRequest request) {
         if (request.getLimitValue() < 1) {
             throw new IllegalArgumentException("limitValue must be >= 1");
+        }
+        
+        // Global rules: if globalWindowSeconds is set, it should be > 0
+        if (request.getGlobalWindowSeconds() != null && request.getGlobalWindowSeconds() <= 0) {
+            throw new IllegalArgumentException(
+                    "globalWindowSeconds must be > 0 if specified. " +
+                    "Example: globalWindowSeconds=60 (limit per minute)"
+            );
         }
     }
 

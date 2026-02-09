@@ -27,6 +27,7 @@ public class SubscriptionPlanService {
     @Transactional
     public SubscriptionPlanDto create(CreateSubscriptionPlanRequest request) {
         validateUniqueName(request.getName());
+        validatePlanConfiguration(request);
         
         SubscriptionPlan plan = SubscriptionPlan.builder()
                 .name(request.getName().trim())
@@ -51,6 +52,30 @@ public class SubscriptionPlanService {
         if (exists) {
             throw new IllegalArgumentException(
                     String.format("Plan with name '%s' already exists", name)
+            );
+        }
+    }
+
+    /**
+     * Validate plan configuration to ensure window settings are consistent.
+     * If windowLimit is set, windowSeconds must also be set.
+     * 
+     * @throws IllegalArgumentException if window configuration is invalid
+     */
+    private void validatePlanConfiguration(CreateSubscriptionPlanRequest request) {
+        boolean hasWindowLimit = request.getWindowLimit() != null && request.getWindowLimit() > 0;
+        boolean hasWindowSeconds = request.getWindowSeconds() != null && request.getWindowSeconds() > 0;
+
+        if (hasWindowLimit && !hasWindowSeconds) {
+            throw new IllegalArgumentException(
+                    "windowSeconds is required when windowLimit is set. " +
+                    "Example: windowLimit=100, windowSeconds=60 (100 requests per minute)"
+            );
+        }
+
+        if (!hasWindowLimit && hasWindowSeconds) {
+            throw new IllegalArgumentException(
+                    "windowSeconds cannot be set without windowLimit"
             );
         }
     }

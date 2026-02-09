@@ -41,16 +41,17 @@ public class DistributedRateLimitService {
     public RateLimitResult tryConsume(UUID clientId) {
         Client client = clientRepository.findByIdWithSubscriptionPlan(clientId).orElse(null);
         if (client == null) {
-            return RateLimitResult.builder().allowed(true).limit(0).current(0).remaining(Long.MAX_VALUE).retryAfterSeconds(0).exceededByType(null).build();
+            return RateLimitResult.builder().allowed(true).limit(0).current(0).remaining(Long.MAX_VALUE).retryAfterSeconds(0).exceededByType(null).globalUsageRatio(null).build();
         }
 
         List<EffectiveLimit> limits = effectiveLimitResolver.resolve(client);
         if (limits.isEmpty()) {
-            return RateLimitResult.builder().allowed(true).limit(0).current(0).remaining(Long.MAX_VALUE).retryAfterSeconds(0).exceededByType(null).build();
+            return RateLimitResult.builder().allowed(true).limit(0).current(0).remaining(Long.MAX_VALUE).retryAfterSeconds(0).exceededByType(null).globalUsageRatio(null).build();
         }
 
         List<String> incrementedKeys = new java.util.ArrayList<>();
         long retryAfterSeconds = 0;
+        Double globalUsageRatio = null;
 
         for (EffectiveLimit limit : limits) {
             String key = buildKey(limit, clientId);
@@ -61,10 +62,20 @@ public class DistributedRateLimitService {
             if (result.isAllowed()) {
                 incrementedKeys.add(key);
                 retryAfterSeconds = Math.max(retryAfterSeconds, result.getRetryAfterSeconds());
+                if (limit.limitType() == RateLimitType.GLOBAL && result.getLimit() > 0) {
+                    globalUsageRatio = (double) result.getCurrent() / result.getLimit();
+                }
             } else {
                 rollbackIncrements(incrementedKeys);
                 log.debug("Rate limit exceeded: limitType={}, clientId={}, key={}", limit.limitType(), clientId, key);
-                return result.toBuilder().retryAfterSeconds(ttlSeconds).exceededByType(limit.limitType()).build();
+                Double deniedRatio = limit.limitType() == RateLimitType.GLOBAL && result.getLimit() > 0
+                        ? (double) result.getCurrent() / result.getLimit()
+                        : null;
+                return result.toBuilder()
+                        .retryAfterSeconds(ttlSeconds)
+                        .exceededByType(limit.limitType())
+                        .globalUsageRatio(deniedRatio)
+                        .build();
             }
         }
 
@@ -75,6 +86,7 @@ public class DistributedRateLimitService {
                 .remaining(Long.MAX_VALUE)
                 .retryAfterSeconds(retryAfterSeconds)
                 .exceededByType(null)
+                .globalUsageRatio(globalUsageRatio)
                 .build();
     }
 
@@ -114,12 +126,13 @@ public class DistributedRateLimitService {
     }
 
     private RateLimitResult checkAndIncrement(String key, long limit, int ttlSeconds) {
+        // On deny we return (0, current, limit) so caller can compute globalUsageRatio = current/limit before we DECR
         String script = """
                 local current = redis.call('INCR', KEYS[1])
                 if current == 1 then redis.call('EXPIRE', KEYS[1], ARGV[1]) end
                 if current > tonumber(ARGV[2]) then
                   redis.call('DECR', KEYS[1])
-                  return {0, current - 1, tonumber(ARGV[2])}
+                  return {0, current, tonumber(ARGV[2])}
                 end
                 return {1, current, tonumber(ARGV[2]) - current}
                 """;
@@ -127,18 +140,20 @@ public class DistributedRateLimitService {
         @SuppressWarnings("unchecked")
         List<Long> result = (List<Long>) redisTemplate.execute(redisScript, List.of(key), String.valueOf(ttlSeconds), String.valueOf(limit));
         if (result == null || result.size() < 3) {
-            return RateLimitResult.builder().allowed(true).limit(limit).current(0).remaining(limit).retryAfterSeconds(ttlSeconds).exceededByType(null).build();
+            return RateLimitResult.builder().allowed(true).limit(limit).current(0).remaining(limit).retryAfterSeconds(ttlSeconds).exceededByType(null).globalUsageRatio(null).build();
         }
         long allowed = result.get(0);
         long current = result.get(1);
-        long remaining = result.get(2);
+        long third = result.get(2);
+        long remaining = allowed == 1 ? Math.max(0, third) : 0; // on deny, Lua returns limit in third slot
         return RateLimitResult.builder()
                 .allowed(allowed == 1)
                 .limit(limit)
                 .current(current)
-                .remaining(Math.max(0, remaining))
+                .remaining(remaining)
                 .retryAfterSeconds(ttlSeconds)
                 .exceededByType(null)
+                .globalUsageRatio(null)
                 .build();
     }
 }

@@ -24,14 +24,13 @@ public class EffectiveLimitResolver {
 
     /**
      * Returns all limits that apply to this client: plan-based (monthly, optional window) + global rules.
-     * If client has no subscription plan, only global rules are returned (client has no per-client limit until assigned a plan).
      */
     public List<EffectiveLimit> resolve(Client client) {
         UUID clientId = client.getId();
         List<EffectiveLimit> out = new ArrayList<>();
 
         SubscriptionPlan plan = client.getSubscriptionPlan();
-        if (plan != null && plan.isActive()) {
+        if (plan.isActive()) {
             out.add(EffectiveLimit.fromPlanMonthly(clientId, plan.getMonthlyLimit()));
             if (plan.getWindowLimit() != null && plan.getWindowLimit() > 0 && plan.getWindowSeconds() != null && plan.getWindowSeconds() > 0) {
                 out.add(EffectiveLimit.fromPlanWindow(clientId, plan.getWindowLimit(), plan.getWindowSeconds()));

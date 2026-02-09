@@ -1,0 +1,43 @@
+<h1>Subscription plans</h1>
+<p class="muted">Clients subscribe to a plan. Their usage is limited by the plan (monthly, and optional per-window).</p>
+
+@if (error) {
+  <p class="error-message">{{ error }}</p>
+}
+
+<form class="form" (ngSubmit)="create()">
+  <div class="row">
+    <label>Plan name</label>
+    <input type="text" [(ngModel)]="newPlan.name" name="name" placeholder="e.g. Basic, Pro" />
+  </div>
+  <div class="row">
+    <label>Monthly limit (requests)</label>
+    <input type="number" [(ngModel)]="newPlan.monthlyLimit" name="monthlyLimit" min="1" />
+  </div>
+  <div class="row">
+    <label>Window limit (optional, e.g. per minute)</label>
+    <input type="number" [(ngModel)]="newPlan.windowLimit" name="windowLimit" min="0" placeholder="Leave empty for no window cap" />
+  </div>
+  <div class="row">
+    <label>Window seconds (if window limit set)</label>
+    <input type="number" [(ngModel)]="newPlan.windowSeconds" name="windowSeconds" min="1" placeholder="e.g. 60" />
+  </div>
+  <button type="submit" [disabled]="creating || !newPlan.name.trim()">Create plan</button>
+</form>
+
+@if (loading) {
+  <p>Loading…</p>
+} @else {
+  <ul class="list">
+    @for (p of plans; track p.id) {
+      <li class="card">
+        <strong>{{ p.name }}</strong>
+        <span class="summary">{{ planSummary(p) }}</span>
+        <span [class.badge]="true" [class.active]="p.active">{{ p.active ? 'Active' : 'Inactive' }}</span>
+      </li>
+    }
+  </ul>
+  @if (plans.length === 0) {
+    <p class="muted">No plans yet. Create one above (or the backend will create a "Default" plan on first run).</p>
+  }
+}

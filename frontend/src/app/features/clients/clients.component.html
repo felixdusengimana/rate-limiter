@@ -6,7 +6,13 @@
 
 <form class="form" (ngSubmit)="create()">
   <input type="text" [(ngModel)]="createName" name="name" placeholder="Client name" />
-  <button type="submit" [disabled]="creating || !createName.trim()">Create client</button>
+  <select [(ngModel)]="createPlanId" name="plan" required>
+    <option value="">Select subscription plan</option>
+    @for (p of plans; track p.id) {
+      <option [value]="p.id">{{ p.name }} ({{ p.monthlyLimit }} / month)</option>
+    }
+  </select>
+  <button type="submit" [disabled]="creating || !createName.trim() || !createPlanId">Create client</button>
 </form>
 
 @if (loading) {
@@ -16,7 +22,7 @@
     @for (c of clients; track c.id) {
       <li class="card">
         <strong>{{ c.name }}</strong>
-        <span class="muted">ID: {{ c.id }}</span>
+        <span class="muted">Plan: {{ planName(c.subscriptionPlanId) }}</span>
         <code class="api-key" [title]="c.apiKey">{{ c.apiKey }}</code>
         <span [class.badge]="true" [class.active]="c.active">{{ c.active ? 'Active' : 'Inactive' }}</span>
       </li>

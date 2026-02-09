@@ -21,7 +21,7 @@ public class ClientDto {
                 .id(c.getId())
                 .name(c.getName())
                 .apiKey(c.getApiKey())
-                .subscriptionPlanId(c.getSubscriptionPlan() != null ? c.getSubscriptionPlan().getId() : null)
+                .subscriptionPlanId(c.getSubscriptionPlan().getId())
                 .active(c.isActive())
                 .build();
     }

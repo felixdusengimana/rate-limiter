@@ -29,11 +29,6 @@ public class RateLimitRuleController {
         return ruleService.findAll();
     }
 
-    @GetMapping("/client/{clientId}")
-    public List<RateLimitRuleDto> byClient(@PathVariable UUID clientId) {
-        return ruleService.findByClientId(clientId);
-    }
-
     @GetMapping("/{id}")
     public RateLimitRuleDto get(@PathVariable UUID id) {
         return ruleService.getById(id);

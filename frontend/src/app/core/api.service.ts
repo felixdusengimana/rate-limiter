@@ -7,11 +7,29 @@ export interface Client {
   id: string;
   name: string;
   apiKey: string;
+  subscriptionPlanId: string | null;
   active: boolean;
 }
 
 export interface CreateClientRequest {
   name: string;
+  subscriptionPlanId: string;
+}
+
+export interface SubscriptionPlan {
+  id: string;
+  name: string;
+  monthlyLimit: number;
+  windowLimit: number | null;
+  windowSeconds: number | null;
+  active: boolean;
+}
+
+export interface CreateSubscriptionPlanRequest {
+  name: string;
+  monthlyLimit: number;
+  windowLimit?: number | null;
+  windowSeconds?: number | null;
 }
 
 export type RateLimitType = 'WINDOW' | 'MONTHLY' | 'GLOBAL';
@@ -66,17 +84,26 @@ export class ApiService {
     return this.http.get<Client>(`${this.base}/api/clients/${id}`);
   }
 
-  // Rate limit rules
+  // Subscription plans
+  createPlan(body: CreateSubscriptionPlanRequest): Observable<SubscriptionPlan> {
+    return this.http.post<SubscriptionPlan>(`${this.base}/api/plans`, body);
+  }
+
+  getPlans(): Observable<SubscriptionPlan[]> {
+    return this.http.get<SubscriptionPlan[]>(`${this.base}/api/plans`);
+  }
+
+  getPlan(id: string): Observable<SubscriptionPlan> {
+    return this.http.get<SubscriptionPlan>(`${this.base}/api/plans/${id}`);
+  }
+
+  // Rate limit rules (global limits only; per-client limits come from subscription)
   createRule(body: CreateRateLimitRuleRequest): Observable<RateLimitRule> {
     return this.http.post<RateLimitRule>(`${this.base}/api/limits`, body);
   }
 
   getRules(): Observable<RateLimitRule[]> {
     return this.http.get<RateLimitRule[]>(`${this.base}/api/limits`);
-  }
-
-  getRulesByClient(clientId: string): Observable<RateLimitRule[]> {
-    return this.http.get<RateLimitRule[]>(`${this.base}/api/limits/client/${clientId}`);
   }
 
   // Notifications (require X-API-Key header)

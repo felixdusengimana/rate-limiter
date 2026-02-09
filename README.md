@@ -5,7 +5,7 @@ Distributed API rate limiter for a notification service (SMS/Email): **Java Spri
 ## Repository layout
 
 - **`backend/`** – Backend (Spring Boot, PostgreSQL, Redis)
-- **`frontend/`** – Angular UI for clients, rate limit rules, and sending notifications
+- **`frontend/`** – Angular UI for subscription plans, clients, global limits, and sending notifications
 
 ## Prerequisites
 
@@ -77,11 +77,14 @@ When a limit is exceeded, the API returns **429 Too Many Requests** with a `Retr
 
 ## Throttling behaviour
 
-- **Client-specific limits (WINDOW, MONTHLY):** **Hard** throttling – immediate 429.
-- **Global limit:** **Soft** throttling – optional delay (configurable via `rate-limiter.soft-delay-ms`) then 429 with `Retry-After`.
+- **Clients (subscription limits):** **Hard** throttling – immediate 429 when over limit.
+- **System (global limit):** **Soft** until 120% usage, then **hard**:
+  - **80%** of global limit used: log warning + TODO notify system administrator (e.g. when email is added).
+  - **100%**: log again, reject with 429 (soft: optional delay + Retry-After).
+  - **120%** and above: switch to **hard** – no delay, immediate 429.
 
 Configure in `backend/src/main/resources/application.properties`:  
-`rate-limiter.throttling=soft` and `rate-limiter.soft-delay-ms=500` (or desired ms).
+`rate-limiter.throttling=soft` and `rate-limiter.soft-delay-ms=500` (for soft global throttling).
 
 ## More details
 

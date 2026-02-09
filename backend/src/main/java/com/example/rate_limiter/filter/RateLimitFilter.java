@@ -22,12 +22,17 @@ import java.util.Map;
 
 /**
  * Applies rate limiting to /api/notify/** using X-API-Key to identify the client.
- * Supports hard throttling (immediate 429) and soft (429 with Retry-After, optional delay).
+ * - Client limits (subscription): hard throttling (immediate 429).
+ * - Global (system) limit: soft until 120% usage, then hard; logs at 80%/100% with TODO to notify admin.
  */
 @Component
 @RequiredArgsConstructor
 @Slf4j
 public class RateLimitFilter extends OncePerRequestFilter {
+
+    private static final double GLOBAL_WARN_THRESHOLD = 0.80;
+    private static final double GLOBAL_FULL_THRESHOLD = 1.00;
+    private static final double GLOBAL_HARD_THRESHOLD = 1.20;
 
     private static final String API_KEY_HEADER = "X-API-Key";
     private static final String RATE_LIMIT_LIMIT_HEADER = "X-RateLimit-Limit";
@@ -89,14 +94,28 @@ public class RateLimitFilter extends OncePerRequestFilter {
                 response.setHeader(RATE_LIMIT_LIMIT_HEADER, String.valueOf(result.getLimit()));
                 response.setHeader(RATE_LIMIT_REMAINING_HEADER, String.valueOf(result.getRemaining()));
             }
+            // Global usage at or above 80%: log and TODO notify system administrator (e.g. when email sending is added)
+            if (result.getGlobalUsageRatio() != null && result.getGlobalUsageRatio() >= GLOBAL_WARN_THRESHOLD) {
+                log.warn("Global rate limit usage at {}% - consider notifying system administrator. " +
+                        "TODO: notify system administrator (e.g. send email when email integration is added)",
+                        String.format("%.0f", result.getGlobalUsageRatio() * 100));
+            }
             filterChain.doFilter(request, response);
             return;
         }
 
-        // Rate limit exceeded: soft throttling only for GLOBAL limit; hard for WINDOW/MONTHLY (client-specific)
-        boolean useSoftThrottling = result.getExceededByType() == RateLimitType.GLOBAL
+        // Client limits (WINDOW/MONTHLY): always hard. Global: soft until 120%, then hard.
+        boolean isGlobalExceeded = result.getExceededByType() == RateLimitType.GLOBAL;
+        Double ratio = result.getGlobalUsageRatio();
+        boolean useHardForGlobal = isGlobalExceeded && ratio != null && ratio >= GLOBAL_HARD_THRESHOLD;
+        boolean useSoftThrottling = isGlobalExceeded && !useHardForGlobal
                 && "soft".equalsIgnoreCase(properties.getThrottling())
                 && properties.getSoftDelayMs() > 0;
+
+        if (isGlobalExceeded && ratio != null && ratio >= GLOBAL_FULL_THRESHOLD) {
+            log.warn("Global rate limit at or over 100% - rejecting request. " +
+                    "TODO: notify system administrator (e.g. send email when email integration is added)");
+        }
         if (useSoftThrottling) {
             try {
                 Thread.sleep(properties.getSoftDelayMs());

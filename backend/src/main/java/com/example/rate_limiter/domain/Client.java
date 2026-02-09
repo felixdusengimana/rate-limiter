@@ -30,10 +30,9 @@ public class Client {
 
     /**
      * Subscription plan determining this client's usage limits (monthly, and optional window).
-     * Null only for legacy clients until assigned a plan (e.g. via startup initializer).
      */
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "subscription_plan_id")
+    @JoinColumn(name = "subscription_plan_id", nullable = false)
     private SubscriptionPlan subscriptionPlan;
 
     @Column(nullable = false)

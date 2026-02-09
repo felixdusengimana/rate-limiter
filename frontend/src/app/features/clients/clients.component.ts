@@ -1,7 +1,7 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { ApiService, Client, CreateClientRequest } from '../../core/api.service';
+import { ApiService, Client, CreateClientRequest, SubscriptionPlan } from '../../core/api.service';
 
 @Component({
   selector: 'app-clients',
@@ -12,15 +12,18 @@ import { ApiService, Client, CreateClientRequest } from '../../core/api.service'
 })
 export class ClientsComponent implements OnInit {
   clients: Client[] = [];
+  plans: SubscriptionPlan[] = [];
   loading = false;
   error = '';
   createName = '';
+  createPlanId = '';
   creating = false;
 
   constructor(private api: ApiService) {}
 
   ngOnInit(): void {
     this.load();
+    this.api.getPlans().subscribe({ next: (list) => (this.plans = list), error: () => {} });
   }
 
   load(): void {
@@ -39,13 +42,14 @@ export class ClientsComponent implements OnInit {
   }
 
   create(): void {
-    if (!this.createName.trim()) return;
+    if (!this.createName.trim() || !this.createPlanId) return;
     this.creating = true;
     this.error = '';
-    const req: CreateClientRequest = { name: this.createName.trim() };
+    const req: CreateClientRequest = { name: this.createName.trim(), subscriptionPlanId: this.createPlanId };
     this.api.createClient(req).subscribe({
       next: () => {
         this.createName = '';
+        this.createPlanId = '';
         this.creating = false;
         this.load();
       },
@@ -54,5 +58,11 @@ export class ClientsComponent implements OnInit {
         this.creating = false;
       },
     });
+  }
+
+  planName(planId: string | null): string {
+    if (!planId) return '—';
+    const p = this.plans.find((x) => x.id === planId);
+    return p ? p.name : planId;
   }
 }

@@ -1,0 +1,42 @@
+:host {
+  display: block;
+  min-height: 100vh;
+}
+
+.app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.nav {
+  display: flex;
+  gap: 0.5rem;
+  padding: 1rem 1.5rem;
+  background: var(--surface, #18181c);
+  border-bottom: 1px solid var(--border, #2a2a30);
+}
+
+.nav a {
+  color: var(--text-muted, #71717a);
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  text-decoration: none;
+}
+
+.nav a:hover {
+  color: var(--text, #e4e4e7);
+}
+
+.nav a.active {
+  color: var(--accent, #22c55e);
+  background: rgba(34, 197, 94, 0.1);
+}
+
+.main {
+  flex: 1;
+  padding: 1.5rem;
+  max-width: 900px;
+  margin: 0 auto;
+  width: 100%;
+}

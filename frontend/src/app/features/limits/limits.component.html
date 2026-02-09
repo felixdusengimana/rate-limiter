@@ -1,0 +1,70 @@
+<h1>Rate limits</h1>
+
+@if (error) {
+  <p class="error-message">{{ error }}</p>
+}
+
+<form class="form" (ngSubmit)="create()">
+  <div class="row">
+    <label>Type</label>
+    <select [(ngModel)]="newRule.limitType" name="limitType">
+      <option value="WINDOW">Per-client window</option>
+      <option value="MONTHLY">Per-client monthly</option>
+      <option value="GLOBAL">Global</option>
+    </select>
+  </div>
+  <div class="row">
+    <label>Limit (requests)</label>
+    <input type="number" [(ngModel)]="newRule.limitValue" name="limitValue" min="1" />
+  </div>
+  @if (newRule.limitType === 'WINDOW') {
+    <div class="row">
+      <label>Window (seconds)</label>
+      <input type="number" [(ngModel)]="newRule.windowSeconds" name="windowSeconds" min="1" />
+    </div>
+    <div class="row">
+      <label>Client</label>
+      <select [(ngModel)]="newRule.clientId" name="clientId">
+        <option [ngValue]="null">—</option>
+        @for (c of clients; track c.id) {
+          <option [ngValue]="c.id">{{ c.name }}</option>
+        }
+      </select>
+    </div>
+  }
+  @if (newRule.limitType === 'MONTHLY') {
+    <div class="row">
+      <label>Client</label>
+      <select [(ngModel)]="newRule.clientId" name="clientId">
+        <option [ngValue]="null">—</option>
+        @for (c of clients; track c.id) {
+          <option [ngValue]="c.id">{{ c.name }}</option>
+        }
+      </select>
+    </div>
+  }
+  @if (newRule.limitType === 'GLOBAL') {
+    <div class="row">
+      <label>Global window (seconds, optional)</label>
+      <input type="number" [(ngModel)]="newRule.globalWindowSeconds" name="globalWindowSeconds" min="0" placeholder="e.g. 60 or leave empty for monthly" />
+    </div>
+  }
+  <button type="submit" [disabled]="creating">Add rule</button>
+</form>
+
+@if (loading) {
+  <p>Loading…</p>
+} @else {
+  <ul class="list">
+    @for (r of rules; track r.id) {
+      <li class="card">
+        <span class="type">{{ r.limitType }}</span>
+        <span>{{ ruleLabel(r) }}</span>
+        <span [class.badge]="true" [class.active]="r.active">{{ r.active ? 'Active' : 'Inactive' }}</span>
+      </li>
+    }
+  </ul>
+  @if (rules.length === 0) {
+    <p class="muted">No rate limit rules yet.</p>
+  }
+}

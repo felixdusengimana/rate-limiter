@@ -1,0 +1,68 @@
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  max-width: 400px;
+  margin-bottom: 1rem;
+}
+
+.row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.row label {
+  font-size: 0.875rem;
+  color: var(--text-muted, #71717a);
+}
+
+.form input,
+.form select,
+.form textarea {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border, #2a2a30);
+  border-radius: 8px;
+  background: var(--surface, #18181c);
+  color: var(--text, #e4e4e7);
+}
+
+.form textarea {
+  resize: vertical;
+  min-height: 4rem;
+}
+
+.actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.actions button {
+  padding: 0.5rem 1rem;
+  background: var(--accent, #22c55e);
+  color: #000;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.actions button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.muted {
+  color: var(--text-muted, #71717a);
+  font-size: 0.875rem;
+}
+
+.error-message {
+  color: var(--error, #ef4444);
+  margin-bottom: 1rem;
+}
+
+.success-message {
+  color: var(--accent, #22c55e);
+  margin-bottom: 1rem;
+}

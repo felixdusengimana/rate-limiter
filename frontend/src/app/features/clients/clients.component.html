@@ -1,0 +1,28 @@
+<h1>Clients</h1>
+
+@if (error) {
+  <p class="error-message">{{ error }}</p>
+}
+
+<form class="form" (ngSubmit)="create()">
+  <input type="text" [(ngModel)]="createName" name="name" placeholder="Client name" />
+  <button type="submit" [disabled]="creating || !createName.trim()">Create client</button>
+</form>
+
+@if (loading) {
+  <p>Loading…</p>
+} @else {
+  <ul class="list">
+    @for (c of clients; track c.id) {
+      <li class="card">
+        <strong>{{ c.name }}</strong>
+        <span class="muted">ID: {{ c.id }}</span>
+        <code class="api-key" [title]="c.apiKey">{{ c.apiKey }}</code>
+        <span [class.badge]="true" [class.active]="c.active">{{ c.active ? 'Active' : 'Inactive' }}</span>
+      </li>
+    }
+  </ul>
+  @if (clients.length === 0) {
+    <p class="muted">No clients yet. Create one above.</p>
+  }
+}

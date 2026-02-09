@@ -1,0 +1,88 @@
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+  max-width: 400px;
+}
+
+.row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.row label {
+  font-size: 0.875rem;
+  color: var(--text-muted, #71717a);
+}
+
+.form input,
+.form select {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border, #2a2a30);
+  border-radius: 8px;
+  background: var(--surface, #18181c);
+  color: var(--text, #e4e4e7);
+}
+
+.form button {
+  padding: 0.5rem 1rem;
+  background: var(--accent, #22c55e);
+  color: #000;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  align-self: flex-start;
+}
+
+.form button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.card {
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border, #2a2a30);
+  border-radius: 8px;
+  margin-bottom: 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.type {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  color: var(--text-muted, #71717a);
+  min-width: 5rem;
+}
+
+.badge {
+  font-size: 0.75rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  background: #333;
+  margin-left: auto;
+}
+
+.badge.active {
+  background: rgba(34, 197, 94, 0.2);
+  color: var(--accent, #22c55e);
+}
+
+.muted {
+  color: var(--text-muted, #71717a);
+}
+
+.error-message {
+  color: var(--error, #ef4444);
+  margin-bottom: 1rem;
+}

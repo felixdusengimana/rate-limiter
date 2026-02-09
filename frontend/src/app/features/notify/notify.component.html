@@ -1,0 +1,38 @@
+<h1>Send notification</h1>
+
+@if (error) {
+  <p class="error-message">{{ error }}</p>
+}
+@if (success) {
+  <p class="success-message">{{ success }}</p>
+}
+
+<form class="form">
+  <div class="row">
+    <label>Client (API key)</label>
+    <select [(ngModel)]="selectedClient" name="client" (ngModelChange)="error = ''; success = ''">
+      <option [ngValue]="null">Select a client</option>
+      @for (c of clients; track c.id) {
+        <option [ngValue]="c">{{ c.name }} ({{ c.apiKey }})</option>
+      }
+    </select>
+  </div>
+  <div class="row">
+    <label>Recipient</label>
+    <input type="text" [(ngModel)]="recipient" name="recipient" placeholder="+250788123456 or user&#64;example.com" />
+  </div>
+  <div class="row">
+    <label>Message</label>
+    <textarea [(ngModel)]="message" name="message" rows="3" placeholder="Message content"></textarea>
+  </div>
+  <div class="actions">
+    <button type="button" (click)="sendSms()" [disabled]="loading || !selectedClient || !recipient.trim() || !message.trim()">
+      Send SMS
+    </button>
+    <button type="button" (click)="sendEmail()" [disabled]="loading || !selectedClient || !recipient.trim() || !message.trim()">
+      Send Email
+    </button>
+  </div>
+</form>
+
+<p class="muted">Requests are rate-limited. Use the client's API key (selected above) via X-API-Key.</p>

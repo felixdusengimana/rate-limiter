@@ -1,0 +1,79 @@
+.form {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.form input {
+  flex: 1;
+  max-width: 300px;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border, #2a2a30);
+  border-radius: 8px;
+  background: var(--surface, #18181c);
+  color: var(--text, #e4e4e7);
+}
+
+.form button {
+  padding: 0.5rem 1rem;
+  background: var(--accent, #22c55e);
+  color: #000;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.form button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.card {
+  padding: 1rem;
+  border: 1px solid var(--border, #2a2a30);
+  border-radius: 8px;
+  margin-bottom: 0.5rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+}
+
+.api-key {
+  font-size: 0.8rem;
+  padding: 0.25rem 0.5rem;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.muted {
+  color: var(--text-muted, #71717a);
+  font-size: 0.875rem;
+}
+
+.badge {
+  font-size: 0.75rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  background: #333;
+}
+
+.badge.active {
+  background: rgba(34, 197, 94, 0.2);
+  color: var(--accent, #22c55e);
+}
+
+.error-message {
+  color: var(--error, #ef4444);
+  margin-bottom: 1rem;
+}

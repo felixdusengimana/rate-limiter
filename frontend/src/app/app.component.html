@@ -1,0 +1,10 @@
+<div class="app">
+  <nav class="nav">
+    <a routerLink="/clients" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: false }">Clients</a>
+    <a routerLink="/limits" routerLinkActive="active">Rate limits</a>
+    <a routerLink="/notify" routerLinkActive="active">Send notification</a>
+  </nav>
+  <main class="main">
+    <router-outlet></router-outlet>
+  </main>
+</div>

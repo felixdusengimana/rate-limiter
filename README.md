@@ -1,4 +1,4 @@
-# API Rate Limiter – Irembo Assignment
+# API Rate Limiter
 
 Distributed API rate limiter for a notification service (SMS/Email): **Java Spring Boot** backend and **Angular** frontend.
 

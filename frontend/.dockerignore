@@ -24,9 +24,6 @@ playwright-report
 # ================================
 # Environment & log files
 # ================================
-.env.local
-.env.*.local
-.env.development.local
 *.log
 *.tsbuildinfo
 

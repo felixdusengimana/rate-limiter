@@ -76,16 +76,16 @@
 			<artifactId>spring-boot-docker-compose</artifactId>
 			<scope>test</scope>
 		</dependency>
-		<!-- Swagger/SpringDoc OpenAPI -->
-		<dependency>
-			<groupId>org.springdoc</groupId>
-			<artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
-			<version>2.3.0</version>
-		</dependency>
 		<!-- Jackson support for java.time (Instant, LocalDateTime, etc.) -->
 		<dependency>
 			<groupId>com.fasterxml.jackson.datatype</groupId>
 			<artifactId>jackson-datatype-jsr310</artifactId>
+		</dependency>
+		<!-- Swagger/SpringDoc OpenAPI - compatible with Spring Boot 3.4 -->
+		<dependency>
+			<groupId>org.springdoc</groupId>
+			<artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+			<version>2.7.0</version>
 		</dependency>
 	</dependencies>
 

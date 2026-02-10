@@ -73,6 +73,9 @@ npm test
 - Create a rate limit rule: `POST /api/limits` (see `backend/README.md` for body examples)
 - Send a notification: `POST /api/notify/sms` or `POST /api/notify/email` with header `X-API-Key: <apiKey>`
 
+**API Documentation:**
+- **Swagger UI:** http://localhost:8080/swagger-ui.html
+
 When a limit is exceeded, the API returns **429 Too Many Requests** with a `Retry-After` header.
 
 ## Throttling behaviour

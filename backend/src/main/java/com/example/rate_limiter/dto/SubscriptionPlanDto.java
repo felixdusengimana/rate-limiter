@@ -1,12 +1,16 @@
 package com.example.rate_limiter.dto;
 
 import com.example.rate_limiter.domain.SubscriptionPlan;
+import lombok.AllArgsConstructor;
 import lombok.Builder;
-import lombok.Value;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 
 import java.util.UUID;
 
-@Value
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
 @Builder
 public class SubscriptionPlanDto {
     UUID id;

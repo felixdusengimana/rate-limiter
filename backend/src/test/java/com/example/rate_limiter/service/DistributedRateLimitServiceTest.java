@@ -5,6 +5,8 @@ import com.example.rate_limiter.domain.RateLimitType;
 import com.example.rate_limiter.domain.SubscriptionPlan;
 import com.example.rate_limiter.repository.ClientRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -46,7 +48,11 @@ class DistributedRateLimitServiceTest {
 
     @BeforeEach
     void setUp() {
-        objectMapper = new ObjectMapper();  // ✅ Real ObjectMapper for serialization
+        // ✅ Real ObjectMapper with java.time support for serialization
+        objectMapper = new ObjectMapper();
+        objectMapper.registerModule(new JavaTimeModule());
+        objectMapper.configure(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS, false);
+        
         rateLimitService = new DistributedRateLimitService(redisTemplate, clientRepository, effectiveLimitResolver, objectMapper);
         clientId = UUID.randomUUID();
         

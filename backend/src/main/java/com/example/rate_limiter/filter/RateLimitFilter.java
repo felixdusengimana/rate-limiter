@@ -3,6 +3,7 @@ package com.example.rate_limiter.filter;
 import com.example.rate_limiter.config.RateLimiterProperties;
 import com.example.rate_limiter.domain.Client;
 import com.example.rate_limiter.domain.RateLimitType;
+import com.example.rate_limiter.domain.ThrottleType;
 import com.example.rate_limiter.service.ClientService;
 import com.example.rate_limiter.service.DistributedRateLimitService;
 import com.example.rate_limiter.service.RateLimitResult;
@@ -33,12 +34,12 @@ public class RateLimitFilter extends OncePerRequestFilter {
 
     private static final double GLOBAL_WARN_THRESHOLD = 0.80;
     private static final double GLOBAL_FULL_THRESHOLD = 1.00;
-    private static final double GLOBAL_HARD_THRESHOLD = 1.20;
-
     private static final String API_KEY_HEADER = "X-API-Key";
     private static final String RATE_LIMIT_LIMIT_HEADER = "X-RateLimit-Limit";
     private static final String RATE_LIMIT_REMAINING_HEADER = "X-RateLimit-Remaining";
     private static final String RETRY_AFTER_HEADER = "Retry-After";
+    private static final String THROTTLE_TYPE_HEADER = "X-Throttle-Type";
+    private static final String THROTTLE_DELAY_HEADER = "X-Suggested-Delay-Ms";
 
     private final ClientService clientService;
     private final DistributedRateLimitService rateLimitService;
@@ -60,7 +61,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
             response.setHeader("Access-Control-Allow-Origin", origin);
             response.setHeader("Access-Control-Allow-Credentials", "true");
             response.setHeader("Access-Control-Expose-Headers", 
-                    "Content-Type, X-RateLimit-Limit, X-RateLimit-Remaining, Retry-After");
+                    "Content-Type, X-RateLimit-Limit, X-RateLimit-Remaining, Retry-After, X-Throttle-Type, X-Suggested-Delay-Ms");
             response.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
             response.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-API-Key");
         }
@@ -171,38 +172,25 @@ public class RateLimitFilter extends OncePerRequestFilter {
     private void handleRateLimitDenied(HttpServletResponse response, RateLimitResult result) 
             throws IOException {
         
-        // Determine throttling approach
-        boolean isGlobalExceeded = result.getExceededByType() == RateLimitType.GLOBAL;
-        Double ratio = result.getGlobalUsageRatio();
-        boolean useHardForGlobal = isGlobalExceeded && ratio != null && ratio >= GLOBAL_HARD_THRESHOLD;
-        boolean useSoftThrottling = isGlobalExceeded && !useHardForGlobal
-                && "soft".equalsIgnoreCase(properties.getThrottling())
-                && properties.getSoftDelayMs() > 0;
-
         // Log if global limit at or over 100%
-        if (isGlobalExceeded && ratio != null && ratio >= GLOBAL_FULL_THRESHOLD) {
-            log.warn("Global rate limit at or over 100% - rejecting request. " +
-                    "TODO: notify system administrator");
+        if (result.getExceededByType() == RateLimitType.GLOBAL && result.getGlobalUsageRatio() != null) {
+            if (result.getGlobalUsageRatio() >= GLOBAL_FULL_THRESHOLD) {
+                log.warn("Global rate limit at or over 100% - rejecting request. " +
+                        "TODO: notify system administrator");
+            }
         }
 
         // Apply soft throttling delay if configured
-        if (useSoftThrottling) {
-            applySoftThrottlingDelay();
+        if (result.getThrottleType() == ThrottleType.SOFT && result.getSoftDelayMs() > 0) {
+            try {
+                Thread.sleep(result.getSoftDelayMs());
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+            }
         }
 
         // Send 429 Too Many Requests
         send429Response(response, result);
-    }
-
-    /**
-     * Apply soft throttling delay (configurable sleep before rejection).
-     */
-    private void applySoftThrottlingDelay() {
-        try {
-            Thread.sleep(properties.getSoftDelayMs());
-        } catch (InterruptedException ie) {
-            Thread.currentThread().interrupt();
-        }
     }
 
     /**
@@ -211,6 +199,11 @@ public class RateLimitFilter extends OncePerRequestFilter {
     private void send429Response(HttpServletResponse response, RateLimitResult result) throws IOException {
         response.setStatus(429);
         response.setHeader(RETRY_AFTER_HEADER, String.valueOf(result.getRetryAfterSeconds()));
+        response.setHeader(THROTTLE_TYPE_HEADER, result.getThrottleType().toString());
+        
+        if (result.getSoftDelayMs() > 0) {
+            response.setHeader(THROTTLE_DELAY_HEADER, String.valueOf(result.getSoftDelayMs()));
+        }
         
         if (result.getLimit() > 0) {
             response.setHeader(RATE_LIMIT_LIMIT_HEADER, String.valueOf(result.getLimit()));
@@ -235,10 +228,12 @@ public class RateLimitFilter extends OncePerRequestFilter {
                 "error", "Too Many Requests",
                 "message", detailMessage,
                 "limitType", result.getExceededByType().toString(),
+                "throttleType", result.getThrottleType().toString(),
                 "limit", result.getLimit(),
                 "current", result.getCurrent(),
                 "retryAfterSeconds", result.getRetryAfterSeconds(),
-                "retryAfterFormatted", formattedDuration
+                "retryAfterFormatted", formattedDuration,
+                "suggestedDelayMs", result.getSoftDelayMs()
         )));
     }
 }

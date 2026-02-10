@@ -1,5 +1,6 @@
 package com.example.rate_limiter.domain;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -67,13 +68,12 @@ public class SubscriptionPlan {
      * 
      * @return true only if BOTH conditions are met
      */
+    @JsonIgnore
     public boolean isEffectivelyActive() {
-        // First: Admin must not have disabled it
         if (!active) {
             return false;
         }
         
-        // Second: Check expiration date (if set)
         if (expiresAt == null) {
             return true;  // No expiry date = never expires
         }

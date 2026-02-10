@@ -1,0 +1,39 @@
+runtime: java17
+
+env: standard
+instances: 1
+automatic_scaling:
+  min_instances: 1
+  max_instances: 50
+  min_idle_instances: 0
+  max_idle_instances: 5
+  cool_down_period_sec: 60
+  cpu_utilization:
+    target_utilization: 0.65
+
+env_variables:
+  SPRING_ENV: "cloud"
+  DB_HOST: "CLOUD_SQL_IP"
+  DB_PORT: "5432"
+  DB_NAME: "rate_limiter"
+  DB_USER: "postgres"
+  REDIS_HOST: "REDIS_IP"
+  REDIS_PORT: "6379"
+
+handlers:
+- url: /swagger-ui.html
+  script: auto
+  
+- url: /api/.*
+  script: auto
+  
+- url: /.*
+  script: auto
+
+skip_files:
+- ^(.git|.gitignore)$
+- ^(.*/)?.?#.*#$
+- ^(.*/)?.?.*\.gfo$
+- ^(\.)?gstyle.xml$
+- ^\.DS_Store$
+- ^(.*/)node_modules/.*$

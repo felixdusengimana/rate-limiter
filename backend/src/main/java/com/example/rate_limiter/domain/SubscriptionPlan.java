@@ -60,13 +60,24 @@ public class SubscriptionPlan {
     }
 
     /**
-     * Check if this subscription is effectively active (not expired).
-     * @return true if expiresAt is null (never expires) or now is before expiresAt
+     * Check if this subscription is effectively active (both manually enabled AND not expired).
+     * Requires:
+     * 1. active = true (admin hasn't disabled it)
+     * 2. expiresAt is null OR now is before expiresAt (not date-expired)
+     * 
+     * @return true only if BOTH conditions are met
      */
     public boolean isEffectivelyActive() {
+        // First: Admin must not have disabled it
+        if (!active) {
+            return false;
+        }
+        
+        // Second: Check expiration date (if set)
         if (expiresAt == null) {
             return true;  // No expiry date = never expires
         }
-        return Instant.now().isBefore(expiresAt);
+        
+        return Instant.now().isBefore(expiresAt);  // Still within validity window
     }
 }

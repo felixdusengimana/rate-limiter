@@ -378,8 +378,9 @@ public class DistributedRateLimitService {
     }
 
     /**
-     * Mark subscription as expired in cache (for 5 minutes) to prevent immediate re-checks.
-     * Prevents DB queries if client re-requests soon after expiry detection.
+     * Mark subscription as inactive in cache (either expired or manually disabled).
+     * Cache for 5 minutes to prevent immediate re-checks from DB.
+     * Prevents DB queries if client re-requests soon after admin disables subscription.
      */
     private void cacheExpiredSubscription(UUID clientId) {
         String cacheKey = SUBSCRIPTION_CACHE_PREFIX + clientId;

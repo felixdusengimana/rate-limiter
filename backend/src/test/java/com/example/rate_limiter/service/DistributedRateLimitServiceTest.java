@@ -107,6 +107,26 @@ class DistributedRateLimitServiceTest {
     }
 
     @Test
+    void tryConsume_denies_when_admin_disables_subscription() {
+        SubscriptionPlan disabledPlan = SubscriptionPlan.builder()
+                .id(UUID.randomUUID())
+                .name("Disabled Plan")
+                .monthlyLimit(1_000L)
+                .active(false)  // ❌ Admin manually disabled (regardless of expiresAt)
+                .expiresAt(Instant.now().plusSeconds(86400))  // Would be valid tomorrow
+                .build();
+        Client clientDisabledSub = Client.builder()
+                .id(clientId)
+                .name("Admin Disabled Sub Client")
+                .apiKey("rk_disabled")
+                .subscriptionPlan(disabledPlan)
+                .build();
+        when(clientRepository.findByIdWithSubscriptionPlan(clientId)).thenReturn(Optional.of(clientDisabledSub));
+        RateLimitResult result = rateLimitService.tryConsume(clientId);
+        assertThat(result.isAllowed()).isFalse();  // ✅ DENY if admin disabled
+    }
+
+    @Test
     void tryConsume_allows_when_subscription_not_yet_expired() {
         SubscriptionPlan futureExpirePlan = SubscriptionPlan.builder()
                 .id(UUID.randomUUID())

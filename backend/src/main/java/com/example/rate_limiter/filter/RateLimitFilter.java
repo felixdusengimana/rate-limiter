@@ -53,11 +53,11 @@ public class RateLimitFilter extends OncePerRequestFilter {
     }
 
     /**
-     * Add CORS headers to allow the frontend (http://localhost:4200) to read the response.
+     * Add CORS headers to allow all origins to read the response.
      */
     private void addCorsHeaders(HttpServletRequest request, HttpServletResponse response) {
         String origin = request.getHeader("Origin");
-        if (origin != null && (origin.equals("http://localhost:4200") || origin.equals("http://127.0.0.1:4200"))) {
+        if (origin != null) {
             response.setHeader("Access-Control-Allow-Origin", origin);
             response.setHeader("Access-Control-Allow-Credentials", "true");
             response.setHeader("Access-Control-Expose-Headers", 

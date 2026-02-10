@@ -2,7 +2,9 @@ package com.example.rate_limiter.service;
 
 import com.example.rate_limiter.domain.Client;
 import com.example.rate_limiter.domain.RateLimitType;
+import com.example.rate_limiter.domain.SubscriptionPlan;
 import com.example.rate_limiter.repository.ClientRepository;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -14,7 +16,9 @@ import java.time.YearMonth;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Distributed rate limiting using Redis. Limits are derived from:
@@ -29,26 +33,43 @@ public class DistributedRateLimitService {
     private static final String KEY_PREFIX = "rl:";
     private static final String WINDOW_PREFIX = "w:";
     private static final String MONTHLY_PREFIX = "m:";
+    private static final String SUBSCRIPTION_CACHE_PREFIX = "sub:cache:";  // ✅ Cache subscription info
+    private static final long DEFAULT_SUB_CACHE_TTL_SECONDS = 3600;  // 1 hour default
 
     private final RedisTemplate<String, String> redisTemplate;
     private final ClientRepository clientRepository;
     private final EffectiveLimitResolver effectiveLimitResolver;
+    private final ObjectMapper objectMapper;
 
     /**
      * Atomically check and consume one request for the given client. Applies limits from
      * the client's subscription plan (monthly, optional window) and global rules.
+     * ALL clients MUST have an active subscription to consume APIs.
+     * 
+     * Uses cache-aside pattern: Check Redis cache first, only fetch from DB on cache miss.
+     * Subscription info cached with TTL based on expiry date to prevent DB thrashing.
      * 
      * @return RateLimitResult with allowed flag, current usage, and retry metadata.
      */
     public RateLimitResult tryConsume(UUID clientId) {
-        // Fetch client with subscription plan
-        Client client = clientRepository.findByIdWithSubscriptionPlan(clientId).orElse(null);
-        if (client == null) {
-            return buildNoLimitResult();
+        // ✅ CACHE-ASIDE: Try Redis first before hitting DB
+        SubscriptionPlan plan = getOrFetchSubscriptionPlan(clientId);
+        if (plan == null) {
+            return buildSubscriptionRequiredResult("Client not found or no subscription");
         }
 
+        // Check if subscription is expired
+        if (!plan.isEffectivelyActive()) {
+            cacheExpiredSubscription(clientId);  // ✅ Cache the "expired" state briefly
+            return buildSubscriptionRequiredResult("Subscription plan is expired or inactive");
+        }
+
+        // ✅ Cache the valid subscription for future requests
+        cacheSubscriptionPlan(clientId, plan);
+
         // Resolve effective limits (merged from subscription plan + global rules)
-        List<EffectiveLimit> limits = effectiveLimitResolver.resolve(client);
+        Client cachedClient = rebuildClientFromPlan(clientId, plan);
+        List<EffectiveLimit> limits = effectiveLimitResolver.resolve(cachedClient);
         if (limits.isEmpty()) {
             return buildNoLimitResult();
         }
@@ -111,6 +132,22 @@ public class DistributedRateLimitService {
                 .limit(0)
                 .current(0)
                 .remaining(Long.MAX_VALUE)
+                .retryAfterSeconds(0)
+                .exceededByType(null)
+                .globalUsageRatio(null)
+                .build();
+    }
+
+    /**
+     * Build a denial result when subscription requirement is not met.
+     */
+    private RateLimitResult buildSubscriptionRequiredResult(String reason) {
+        log.warn("Subscription requirement not met: {}", reason);
+        return RateLimitResult.builder()
+                .allowed(false)
+                .limit(0)
+                .current(0)
+                .remaining(0)
                 .retryAfterSeconds(0)
                 .exceededByType(null)
                 .globalUsageRatio(null)
@@ -282,6 +319,103 @@ public class DistributedRateLimitService {
                 .retryAfterSeconds(ttlSeconds)
                 .exceededByType(null)
                 .globalUsageRatio(null)
+                .build();
+    }
+
+    /**
+     * CACHE-ASIDE: Fetch subscription plan from Redis cache, or fall back to DB.
+     * Only calls database on cache miss.
+     */
+    private SubscriptionPlan getOrFetchSubscriptionPlan(UUID clientId) {
+        String cacheKey = SUBSCRIPTION_CACHE_PREFIX + clientId;
+        
+        try {
+            // ✅ Try Redis cache first
+            String cached = redisTemplate.opsForValue().get(cacheKey);
+            if (cached != null) {
+                log.debug("Subscription cache HIT for client: {}", clientId);
+                // Check if it's a "null marker" (expired or not found)
+                if ("EXPIRED".equals(cached)) {
+                    return null;
+                }
+                return objectMapper.readValue(cached, SubscriptionPlan.class);
+            }
+        } catch (Exception e) {
+            log.warn("Failed to deserialize subscription cache for {}: {}", clientId, e.getMessage());
+        }
+
+        // ✅ Cache MISS: Fetch from database
+        log.debug("Subscription cache MISS for client: {}, fetching from DB", clientId);
+        Optional<Client> clientOptional = clientRepository.findByIdWithSubscriptionPlan(clientId);
+        
+        if (clientOptional.isEmpty() || clientOptional.get().getSubscriptionPlan() == null) {
+            // Cache the "not found" state briefly (5 min) to prevent repeated DB hits
+            redisTemplate.opsForValue().set(cacheKey, "EXPIRED", 300, TimeUnit.SECONDS);
+            return null;
+        }
+
+        return clientOptional.get().getSubscriptionPlan();
+    }
+
+    /**
+     * Cache subscription plan in Redis with smart TTL:
+     * - If subscription has expiry date: TTL = time until expiry
+     * - Otherwise: TTL = 1 hour (default)
+     * 
+     * This prevents DB thrashing while ensuring expired subscriptions are caught quickly.
+     */
+    private void cacheSubscriptionPlan(UUID clientId, SubscriptionPlan plan) {
+        String cacheKey = SUBSCRIPTION_CACHE_PREFIX + clientId;
+        
+        try {
+            String serialized = objectMapper.writeValueAsString(plan);
+            long ttlSeconds = calculateSubscriptionCacheTTL(plan);
+            redisTemplate.opsForValue().set(cacheKey, serialized, ttlSeconds, TimeUnit.SECONDS);
+            log.debug("Cached subscription for client: {} with TTL: {} seconds", clientId, ttlSeconds);
+        } catch (Exception e) {
+            log.warn("Failed to cache subscription for {}: {}", clientId, e.getMessage());
+        }
+    }
+
+    /**
+     * Mark subscription as expired in cache (for 5 minutes) to prevent immediate re-checks.
+     * Prevents DB queries if client re-requests soon after expiry detection.
+     */
+    private void cacheExpiredSubscription(UUID clientId) {
+        String cacheKey = SUBSCRIPTION_CACHE_PREFIX + clientId;
+        redisTemplate.opsForValue().set(cacheKey, "EXPIRED", 300, TimeUnit.SECONDS);  // 5 min
+    }
+
+    /**
+     * Calculate appropriate TTL for subscription cache.
+     * If subscription expires in 1 hour: cache for 30 min (refresh buffer)
+     * If subscription expires in 24 hours: cache for 6 hours
+     * If no expiry: cache for default 1 hour
+     */
+    private long calculateSubscriptionCacheTTL(SubscriptionPlan plan) {
+        if (plan.getExpiresAt() == null) {
+            return DEFAULT_SUB_CACHE_TTL_SECONDS;  // 1 hour
+        }
+
+        long secondsUntilExpiry = ChronoUnit.SECONDS.between(Instant.now(), plan.getExpiresAt());
+        if (secondsUntilExpiry <= 0) {
+            return 60;  // Already expired, cache for just 1 minute
+        }
+
+        // Cache for 50% of remaining time (with minimum 1 min, max 1 hour buffer)
+        long halfLife = secondsUntilExpiry / 2;
+        return Math.min(Math.max(halfLife, 60), DEFAULT_SUB_CACHE_TTL_SECONDS);
+    }
+
+    /**
+     * Rebuild a minimal Client object from cached SubscriptionPlan for the resolver.
+     * Avoids need to keep full Client object in cache.
+     */
+    private Client rebuildClientFromPlan(UUID clientId, SubscriptionPlan plan) {
+        return Client.builder()
+                .id(clientId)
+                .name("cached")  // Minimal data
+                .subscriptionPlan(plan)
                 .build();
     }
 }

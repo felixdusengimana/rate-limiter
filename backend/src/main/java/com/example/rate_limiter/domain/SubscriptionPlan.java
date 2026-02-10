@@ -48,11 +48,25 @@ public class SubscriptionPlan {
     @Builder.Default
     private boolean active = true;
 
+    @Column(name = "expires_at")
+    private Instant expiresAt;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
     @PrePersist
     void createdAt() {
         if (this.createdAt == null) this.createdAt = Instant.now();
+    }
+
+    /**
+     * Check if this subscription is effectively active (not expired).
+     * @return true if expiresAt is null (never expires) or now is before expiresAt
+     */
+    public boolean isEffectivelyActive() {
+        if (expiresAt == null) {
+            return true;  // No expiry date = never expires
+        }
+        return Instant.now().isBefore(expiresAt);
     }
 }

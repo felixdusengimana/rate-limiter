@@ -1,5 +1,6 @@
 package com.example.rate_limiter.service;
 
+import com.example.rate_limiter.config.RateLimiterProperties;
 import com.example.rate_limiter.domain.Client;
 import com.example.rate_limiter.domain.RateLimitType;
 import com.example.rate_limiter.domain.SubscriptionPlan;
@@ -37,15 +38,12 @@ public class DistributedRateLimitService {
     private static final String SUBSCRIPTION_CACHE_PREFIX = "sub:cache:";  // ✅ Cache subscription info
     private static final long DEFAULT_SUB_CACHE_TTL_SECONDS = 3600;  // 1 hour default
     
-    // Soft throttling thresholds for global limits
-    private static final double GLOBAL_SOFT_THRESHOLD = 0.80;   // 80% usage
-    private static final double GLOBAL_HARD_THRESHOLD = 1.20;   // 120% usage
-    private static final long SOFT_THROTTLE_DELAY_MS = 100;     // 100ms suggested delay for client retry
 
     private final RedisTemplate<String, String> redisTemplate;
     private final ClientRepository clientRepository;
     private final EffectiveLimitResolver effectiveLimitResolver;
     private final ObjectMapper objectMapper;
+    private final RateLimiterProperties rateLimiterProperties;
 
     /**
      * Atomically check and consume one request for the given client. Applies limits from
@@ -110,7 +108,7 @@ public class DistributedRateLimitService {
                 
                 Double deniedRatio = calculateGlobalUsageRatio(limit, result);
                 ThrottleType throttleType = determineThrottleType(limit, result, deniedRatio);
-                long softDelay = (throttleType == ThrottleType.SOFT) ? SOFT_THROTTLE_DELAY_MS : 0;
+                long softDelay = (throttleType == ThrottleType.SOFT) ? rateLimiterProperties.getSoftDelayMs() : 0;
                 
                 return result.toBuilder()
                         .retryAfterSeconds(ttlSeconds)
@@ -357,9 +355,9 @@ public class DistributedRateLimitService {
         
         // Global limits use ratio-based throttling
         if (limit.limitType() == RateLimitType.GLOBAL && globalUsageRatio != null) {
-            if (globalUsageRatio >= GLOBAL_HARD_THRESHOLD) {
+            if (globalUsageRatio >= rateLimiterProperties.getGlobalHardThreshold()) {
                 return ThrottleType.HARD;           // >= 120%: immediate rejection
-            } else if (globalUsageRatio >= GLOBAL_SOFT_THRESHOLD) {
+            } else if (globalUsageRatio >= rateLimiterProperties.getGlobalSoftThreshold()) {
                 return ThrottleType.SOFT;           // 80-120%: request client retry with delay
             }
         }

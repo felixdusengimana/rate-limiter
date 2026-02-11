@@ -1,5 +1,6 @@
 package com.example.rate_limiter.service;
 
+import com.example.rate_limiter.config.RateLimiterProperties;
 import com.example.rate_limiter.domain.Client;
 import com.example.rate_limiter.domain.RateLimitType;
 import com.example.rate_limiter.domain.SubscriptionPlan;
@@ -43,6 +44,8 @@ class DistributedRateLimitServiceTest {
 
     private DistributedRateLimitService rateLimitService;
 
+    private RateLimiterProperties rateLimiterProperties;
+
     private UUID clientId;
     private Client client;
 
@@ -53,7 +56,9 @@ class DistributedRateLimitServiceTest {
         objectMapper.registerModule(new JavaTimeModule());
         objectMapper.configure(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS, false);
         
-        rateLimitService = new DistributedRateLimitService(redisTemplate, clientRepository, effectiveLimitResolver, objectMapper);
+        rateLimiterProperties = new RateLimiterProperties();
+        
+        rateLimitService = new DistributedRateLimitService(redisTemplate, clientRepository, effectiveLimitResolver, objectMapper, rateLimiterProperties);
         clientId = UUID.randomUUID();
         
         // ✅ Mock Redis cache operations (cache miss by default)
@@ -207,5 +212,32 @@ class DistributedRateLimitServiceTest {
         assertThat(result.getLimit()).isEqualTo(2);
         assertThat(result.getRetryAfterSeconds()).isPositive();
         assertThat(result.getExceededByType()).isEqualTo(RateLimitType.MONTHLY);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void tryConsume_returns_soft_delay_when_global_soft_limit_exceeded() {
+        // Arrange
+        rateLimiterProperties.setGlobalSoftThreshold(0.70); // lower it for test
+        rateLimiterProperties.setSoftDelayMs(250);
+        
+        when(clientRepository.findByIdWithSubscriptionPlan(clientId)).thenReturn(Optional.of(client));
+        
+        EffectiveLimit globalLimit = EffectiveLimit.fromGlobalRule(100, 60);
+        when(effectiveLimitResolver.resolve(any(Client.class))).thenReturn(List.of(globalLimit));
+        
+        // Mock Redis checkAndIncrement to return 75% usage (exceeded soft threshold of 70%)
+        // checkAndIncrement calls redisTemplate.execute
+        when(redisTemplate.execute(any(org.springframework.data.redis.core.script.RedisScript.class), anyList(), anyString(), anyString()))
+                .thenReturn(List.of(0L, 75L, 100L)); // denied, current would be 75, limit 100
+        
+        // Act
+        RateLimitResult result = rateLimitService.tryConsume(clientId);
+        
+        // Assert
+        assertThat(result.isAllowed()).isFalse();
+        assertThat(result.getGlobalUsageRatio()).isEqualTo(0.75);
+        assertThat(result.getThrottleType()).isEqualTo(com.example.rate_limiter.domain.ThrottleType.SOFT);
+        assertThat(result.getSoftDelayMs()).isEqualTo(250);
     }
 }

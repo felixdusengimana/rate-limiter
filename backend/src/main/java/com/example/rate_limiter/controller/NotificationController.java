@@ -10,7 +10,6 @@ import org.springframework.web.bind.annotation.*;
 /**
  * Protected notification API for sending SMS and email messages.
  * Rate limiting is applied by filter using the X-API-Key header.
- * When a client exceeds their rate limit, returns 429 Too Many Requests with Retry-After header.
  */
 @RestController
 @RequestMapping("/api/notify")

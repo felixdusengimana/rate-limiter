@@ -20,6 +20,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Map;
 
 /**
@@ -32,8 +33,6 @@ import java.util.Map;
 @Slf4j
 public class RateLimitFilter extends OncePerRequestFilter {
 
-    private static final double GLOBAL_WARN_THRESHOLD = 0.80;
-    private static final double GLOBAL_FULL_THRESHOLD = 1.00;
     private static final String API_KEY_HEADER = "X-API-Key";
     private static final String RATE_LIMIT_LIMIT_HEADER = "X-RateLimit-Limit";
     private static final String RATE_LIMIT_REMAINING_HEADER = "X-RateLimit-Remaining";
@@ -103,18 +102,26 @@ public class RateLimitFilter extends OncePerRequestFilter {
         }
 
         // Check rate limits
-        RateLimitResult result = rateLimitService.tryConsume(client.getId());
+        try {
+            RateLimitResult result = rateLimitService.tryConsume(client.getId());
 
-        // Request allowed
-        if (result.isAllowed()) {
-            setRateLimitHeaders(response, result);
-            logGlobalWarningsIfNeeded(result);
-            filterChain.doFilter(request, response);
-            return;
+            // Request allowed
+            if (result.isAllowed()) {
+                setRateLimitHeaders(response, result);
+                logGlobalWarningsIfNeeded(result);
+                filterChain.doFilter(request, response);
+                return;
+            }
+
+            // Request denied: handle throttling and response
+            handleRateLimitDenied(response, result);
+        } catch (org.springframework.data.redis.RedisConnectionFailureException e) {
+            log.error("Redis connection failed while checking rate limits", e);
+            sendServiceUnavailableResponse(response, "Rate limiting service temporarily unavailable");
+        } catch (Exception e) {
+            log.error("Unexpected error in rate limit filter", e);
+            sendServiceUnavailableResponse(response, "An error occurred while processing your request");
         }
-
-        // Request denied: handle throttling and response
-        handleRateLimitDenied(response, result);
     }
 
     /**
@@ -142,6 +149,18 @@ public class RateLimitFilter extends OncePerRequestFilter {
     }
 
     /**
+     * Send 503 Service Unavailable response with error message.
+     */
+    private void sendServiceUnavailableResponse(HttpServletResponse response, String message) throws IOException {
+        response.setStatus(HttpServletResponse.SC_SERVICE_UNAVAILABLE);
+        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+        response.getWriter().write(objectMapper.writeValueAsString(Map.of(
+                "error", "Service Unavailable",
+                "message", message
+        )));
+    }
+
+    /**
      * Set rate limit headers (X-RateLimit-Limit, X-RateLimit-Remaining) when request is allowed.
      */
     private void setRateLimitHeaders(HttpServletResponse response, RateLimitResult result) {
@@ -159,7 +178,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
             return;
         }
 
-        if (result.getGlobalUsageRatio() >= GLOBAL_WARN_THRESHOLD) {
+        if (result.getGlobalUsageRatio() >= properties.getGlobalWarnThreshold()) {
             log.warn("Global rate limit usage at {}% - consider notifying administrator. " +
                     "TODO: notify system administrator (e.g. send email)",
                     String.format("%.0f", result.getGlobalUsageRatio() * 100));
@@ -174,7 +193,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
         
         // Log if global limit at or over 100%
         if (result.getExceededByType() == RateLimitType.GLOBAL && result.getGlobalUsageRatio() != null) {
-            if (result.getGlobalUsageRatio() >= GLOBAL_FULL_THRESHOLD) {
+            if (result.getGlobalUsageRatio() >= properties.getGlobalFullThreshold()) {
                 log.warn("Global rate limit at or over 100% - rejecting request. " +
                         "TODO: notify system administrator");
             }

@@ -15,7 +15,6 @@ public class CreateClientRequest {
     @NotBlank
     String name;
 
-    /** Subscription plan ID. Required so the client's usage is limited by their plan. */
     @NotNull
     UUID subscriptionPlanId;
 }

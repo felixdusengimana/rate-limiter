@@ -24,8 +24,8 @@ public class SwaggerConfig {
                         .version("1.0.0")
                         .description("Distributed API rate limiter for SMS/Email notifications")
                         .contact(new Contact()
-                                .name("Development Team")
-                                .email("dev@example.com"))
+                                .name("Felix Dusengimana")
+                                .email("phelixdusengimana@gmail.com"))
                         .license(new License()
                                 .name("Apache 2.0")
                                 .url("https://www.apache.org/licenses/LICENSE-2.0.html")));

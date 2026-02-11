@@ -178,8 +178,8 @@ public class RateLimitFilter extends OncePerRequestFilter {
             return;
         }
 
-        if (result.getGlobalUsageRatio() >= properties.getGlobalWarnThreshold()) {
-            log.warn("Global rate limit usage at {}% - consider notifying administrator. " +
+        if (result.getGlobalUsageRatio() >= properties.getGlobalWarnThreshold() && result.getGlobalUsageRatio() < properties.getGlobalFullThreshold()) {
+            log.warn("Global rate limit usage at {}% notifying administrator. " +
                     "TODO: notify system administrator (e.g. send email)",
                     String.format("%.0f", result.getGlobalUsageRatio() * 100));
         }
@@ -193,7 +193,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
         
         // Log if global limit at or over 100%
         if (result.getExceededByType() == RateLimitType.GLOBAL && result.getGlobalUsageRatio() != null) {
-            if (result.getGlobalUsageRatio() >= properties.getGlobalFullThreshold()) {
+            if (result.getGlobalUsageRatio() >= properties.getGlobalFullThreshold() && result.getGlobalUsageRatio() < properties.getGlobalHardThreshold()) {
                 log.warn("Global rate limit at or over 100% - rejecting request. " +
                         "TODO: notify system administrator");
             }

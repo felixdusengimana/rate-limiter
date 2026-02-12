@@ -463,20 +463,38 @@ public class DistributedRateLimitService {
                 .build();
     }
 
+
     /**
-     * Public method to invalidate subscription cache for a client.
-     * Called when a client's subscription plan is updated.
-     * This forces the next rate limit check to fetch the updated plan from DB.
+     * Clear ALL Redis data for a specific client: subscription cache and all rate limit counters.
+     * Called when a client's plan is updated to reset their rate limit usage.
+     * 
+     * Clears:
+     * - Subscription plan cache (sub:cache:{clientId})
+     * - Window limit counters (rl:c:{clientId}:w:*)
+     * - Monthly limit counters (rl:c:{clientId}:m:*)
      * 
      * @param clientId the client UUID
      */
-    public void invalidateSubscriptionCache(UUID clientId) {
-        String cacheKey = SUBSCRIPTION_CACHE_PREFIX + clientId;
+    public void clearAllClientRedisData(UUID clientId) {
         try {
-            Boolean deleted = redisTemplate.delete(cacheKey);
-            log.debug("Invalidated subscription cache for client: {} (deleted: {})", clientId, deleted);
+            // Clear subscription cache
+            String subscriptionCacheKey = SUBSCRIPTION_CACHE_PREFIX + clientId;
+            redisTemplate.delete(subscriptionCacheKey);
+            
+            // Clear all rate limit keys for this client using pattern scan
+            String clientKeyPattern = KEY_PREFIX + "c:" + clientId + ":*";
+            redisTemplate.keys(clientKeyPattern).forEach(key -> {
+                try {
+                    redisTemplate.delete(key);
+                    log.debug("Deleted Redis key: {}", key);
+                } catch (Exception e) {
+                    log.warn("Failed to delete Redis key {}: {}", key, e.getMessage());
+                }
+            });
+            
+            log.info("✅ Cleared all Redis data for client: {}", clientId);
         } catch (Exception e) {
-            log.warn("Failed to invalidate subscription cache for {}: {}", clientId, e.getMessage());
+            log.warn("Failed to clear Redis data for client {}: {}", clientId, e.getMessage());
         }
     }
 }

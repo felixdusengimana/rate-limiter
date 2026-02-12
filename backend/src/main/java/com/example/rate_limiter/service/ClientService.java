@@ -90,7 +90,8 @@ public class ClientService {
 
     /**
      * Update an existing client's name and/or subscription plan.
-     * Invalidates cached subscription info to ensure the new plan takes effect immediately.
+     * Clears all Redis data for the client (cache + rate limit counters) to ensure
+     * the new plan takes effect immediately and counters are reset.
      * 
      * @param id the client UUID
      * @param request contains updated client fields
@@ -113,7 +114,8 @@ public class ClientService {
 
         client = clientRepository.save(client);
         
-        rateLimitService.invalidateSubscriptionCache(id);
+        // Clear all Redis data for this client: subscription cache + rate limit counters
+        rateLimitService.clearAllClientRedisData(id);
         
         return ClientDto.from(client);
     }

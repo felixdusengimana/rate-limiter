@@ -44,7 +44,7 @@
           name="client"
           required
           [disabled]="loading"
-          (change)="clearError(); clearSuccess()"
+          (change)="onClientChange()"
         >
           <option [ngValue]="null">Choose a client...</option>
           @for (c of clients; track c.id) {

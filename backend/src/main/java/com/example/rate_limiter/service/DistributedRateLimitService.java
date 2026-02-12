@@ -462,4 +462,21 @@ public class DistributedRateLimitService {
                 .subscriptionPlan(plan)
                 .build();
     }
+
+    /**
+     * Public method to invalidate subscription cache for a client.
+     * Called when a client's subscription plan is updated.
+     * This forces the next rate limit check to fetch the updated plan from DB.
+     * 
+     * @param clientId the client UUID
+     */
+    public void invalidateSubscriptionCache(UUID clientId) {
+        String cacheKey = SUBSCRIPTION_CACHE_PREFIX + clientId;
+        try {
+            Boolean deleted = redisTemplate.delete(cacheKey);
+            log.debug("Invalidated subscription cache for client: {} (deleted: {})", clientId, deleted);
+        } catch (Exception e) {
+            log.warn("Failed to invalidate subscription cache for {}: {}", clientId, e.getMessage());
+        }
+    }
 }

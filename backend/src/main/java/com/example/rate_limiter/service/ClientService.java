@@ -19,6 +19,7 @@ public class ClientService {
 
     private final ClientRepository clientRepository;
     private final SubscriptionPlanRepository subscriptionPlanRepository;
+    private final DistributedRateLimitService rateLimitService;
     private static final String API_KEY_PREFIX = "rk_";
 
     /**
@@ -89,6 +90,7 @@ public class ClientService {
 
     /**
      * Update an existing client's name and/or subscription plan.
+     * Invalidates cached subscription info to ensure the new plan takes effect immediately.
      * 
      * @param id the client UUID
      * @param request contains updated client fields
@@ -110,6 +112,9 @@ public class ClientService {
         client.setSubscriptionPlan(plan);
 
         client = clientRepository.save(client);
+        
+        rateLimitService.invalidateSubscriptionCache(id);
+        
         return ClientDto.from(client);
     }
 }

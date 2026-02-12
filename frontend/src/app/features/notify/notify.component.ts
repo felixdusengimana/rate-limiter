@@ -38,6 +38,18 @@ export class NotifyComponent implements OnInit {
     this.loadClients();
   }
 
+  /**
+   * Called when client selection changes.
+   * Clears all state from previous client's message sending attempt.
+   */
+  onClientChange(): void {
+    this.errorDetail = null;
+    this.successMessage = '';
+    this.successId = '';
+    this.recipient = '';
+    this.message = '';
+  }
+
   private loadClients(): void {
     this.api.getClients().subscribe({
       next: (list) => (this.clients = list),

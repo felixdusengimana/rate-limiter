@@ -135,7 +135,6 @@
       <div class="form-actions">
         <button
           type="submit"
-          (click)="send()"
           [disabled]="loading || !selectedClient || !isValidRecipient() || !message.trim()"
           [class.loading]="loading"
         >
